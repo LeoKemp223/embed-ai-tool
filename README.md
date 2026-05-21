@@ -15,9 +15,35 @@
 帮我安装 https://github.com/LeoKemp223/embed-ai-tool.git 的 skill
 ```
 
-大模型会自动克隆仓库、运行安装脚本完成配置。
+大模型会展示可用技能列表，让你选择全部安装或按需安装，然后自动完成配置。
 
-## 脚本安装（推荐）
+## npx 安装（推荐）
+
+需要 [Node.js](https://nodejs.org/) 14+。使用 [skills CLI](https://github.com/vercel-labs/skills) 一键管理，支持 Claude Code、Cursor、Codex 等 50+ AI 编码助手。
+
+### 安装全部 skill
+
+```bash
+npx skills add LeoKemp223/embed-ai-tool -g -y
+```
+
+### 安装指定 skill
+
+```bash
+npx skills add LeoKemp223/embed-ai-tool --skill build-cmake --skill flash-openocd -g -y
+```
+
+### 管理
+
+```bash
+npx skills ls -g            # 查看已安装
+npx skills update -g        # 更新
+npx skills remove -g        # 移除
+```
+
+`-g` 表示全局安装（`~/.claude/skills/`），去掉则安装到当前项目（`.claude/skills/`）。
+
+## 脚本安装
 
 ### 前置条件
 

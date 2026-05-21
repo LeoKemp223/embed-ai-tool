@@ -15,9 +15,35 @@ In any LLM chat that supports skills, enter:
 Install skills from https://github.com/LeoKemp223/embed-ai-tool.git
 ```
 
-The LLM will automatically clone the repository and run the installation script.
+The LLM will present the available skills list, let you choose to install all or select specific ones, then automatically complete the setup.
 
-## Script Installation (Recommended)
+## npx Install (Recommended)
+
+Requires [Node.js](https://nodejs.org/) 14+. Uses the [skills CLI](https://github.com/vercel-labs/skills) for one-command management, supporting Claude Code, Cursor, Codex, and 50+ AI coding assistants.
+
+### Install All Skills
+
+```bash
+npx skills add LeoKemp223/embed-ai-tool -g -y
+```
+
+### Install Specific Skills
+
+```bash
+npx skills add LeoKemp223/embed-ai-tool --skill build-cmake --skill flash-openocd -g -y
+```
+
+### Manage
+
+```bash
+npx skills ls -g            # List installed
+npx skills update -g        # Update
+npx skills remove -g        # Remove
+```
+
+`-g` installs globally (`~/.claude/skills/`). Omit it to install to the current project (`.claude/skills/`).
+
+## Script Installation
 
 ### Prerequisites
 
