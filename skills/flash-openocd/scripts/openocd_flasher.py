@@ -41,13 +41,13 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
         sys.path.insert(0, str(_candidate))
         break
 try:
-    from tool_config import get_tool_path, set_tool_path, find_pico_sdk_openocd_scripts
+    from tool_config import get_tool_path, set_tool_path, find_sdk_bundled_openocd_scripts
 except ImportError:
     def get_tool_path(name):
         return None
     def set_tool_path(name, path):
         return None
-    def find_pico_sdk_openocd_scripts():
+    def find_sdk_bundled_openocd_scripts():
         return None
 
 
@@ -232,10 +232,10 @@ def build_flash_command(
 ) -> list[str] | None:
     cmd: list[str] = ["openocd"]
 
-    # Pico SDK OpenOCD scripts (for rp2350.cfg etc.)
-    pico_scripts = find_pico_sdk_openocd_scripts()
-    if pico_scripts:
-        cmd.extend(["-s", pico_scripts])
+    # 额外 OpenOCD scripts（SDK 自带的芯片特定目标配置）
+    extra_scripts = find_sdk_bundled_openocd_scripts()
+    if extra_scripts:
+        cmd.extend(["-s", extra_scripts])
 
     # 接口配置
     if interface:

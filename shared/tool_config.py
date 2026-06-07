@@ -120,20 +120,20 @@ def list_tools(
     return result
 
 
-def find_pico_sdk_openocd_scripts() -> str | None:
-    """探测 Pico SDK 自带的 OpenOCD scripts 目录。
+def find_sdk_bundled_openocd_scripts() -> str | None:
+    """探测嵌入式 SDK 自带的 OpenOCD scripts 目录。
     
-    Pico SDK 安装自己的 OpenOCD，包含芯片特定目标配置
-    （如 rp2350.cfg），系统 OpenOCD 可能没有。
+    部分 SDK（如 Raspberry Pi Pico SDK、PlatformIO 等）会安装
+    自己的 OpenOCD，包含芯片特定目标配置文件（系统 OpenOCD 可能没有）。
     返回 scripts 目录路径，找不到返回 None。
     
     跨平台：Windows 用 openocd.exe，macOS/Linux 用 bin/openocd。
     """
     import sys as _sys
-    pico_openocd = Path.home() / ".pico-sdk" / "openocd"
-    if not pico_openocd.exists():
+    sdk_dir = Path.home() / ".pico-sdk" / "openocd"
+    if not sdk_dir.exists():
         return None
-    for version_dir in sorted(pico_openocd.iterdir(), reverse=True):
+    for version_dir in sorted(sdk_dir.iterdir(), reverse=True):
         if not version_dir.is_dir():
             continue
         # Binaries can be in root (Windows) or bin/ (Unix)

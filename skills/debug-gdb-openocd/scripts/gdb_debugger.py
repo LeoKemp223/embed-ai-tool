@@ -41,13 +41,13 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
         sys.path.insert(0, str(_candidate))
         break
 try:
-    from tool_config import get_tool_path, set_tool_path, find_pico_sdk_openocd_scripts
+    from tool_config import get_tool_path, set_tool_path, find_sdk_bundled_openocd_scripts
 except ImportError:
     def get_tool_path(name):
         return None
     def set_tool_path(name, path):
         return None
-    def find_pico_sdk_openocd_scripts():
+    def find_sdk_bundled_openocd_scripts():
         return None
 
 
@@ -208,10 +208,10 @@ def build_openocd_command(
 ) -> list[str] | None:
     cmd: list[str] = ["openocd"]
 
-    # Pico SDK OpenOCD scripts (for rp2350.cfg etc.)
-    pico_scripts = find_pico_sdk_openocd_scripts()
-    if pico_scripts:
-        cmd.extend(["-s", pico_scripts])
+    # 额外 OpenOCD scripts（SDK 自带的芯片特定目标配置）
+    extra_scripts = find_sdk_bundled_openocd_scripts()
+    if extra_scripts:
+        cmd.extend(["-s", extra_scripts])
 
     if interface:
         icfg = INTERFACE_CONFIGS.get(interface)
@@ -232,7 +232,7 @@ def build_openocd_command(
 
     if not targets:
         print("ℹ️ 未指定 --target，OpenOCD 可能缺少目标芯片配置。")
-        print("   某些调试器如 RP2350 需要目标配置，例如: --target target/rp2350.cfg")
+        print("   部分多核目标芯片需要额外目标配置，例如: --target target/stm32h7x.cfg")
 
     cmd.extend(["-c", f"gdb_port {gdb_port}"])
     cmd.extend(["-c", "init"])
@@ -263,7 +263,7 @@ def start_openocd(cmd: list[str], gdb_port: int) -> subprocess.Popen | None:
         return None
 
     if wait_for_port(gdb_port):
-        time.sleep(1.5)  # 等待目标芯片初始化完成（特别是双核 RP2350）
+        time.sleep(1.5)  # 等待目标芯片初始化完成（多核目标需更长时间）
         print(f"✅ OpenOCD 已就绪，GDB 端口: {gdb_port}")
         return proc
 
