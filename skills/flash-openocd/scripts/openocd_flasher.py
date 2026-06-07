@@ -40,7 +40,13 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
     if (_candidate / "tool_config.py").exists():
         sys.path.insert(0, str(_candidate))
         break
-from tool_config import get_tool_path, set_tool_path
+try:
+    from tool_config import get_tool_path, set_tool_path
+except ImportError:
+    def get_tool_path(name):
+        return None
+    def set_tool_path(name, path):
+        return None
 
 
 ARTIFACT_EXTENSIONS = {".elf": "elf", ".hex": "hex", ".bin": "bin", ".axf": "elf"}
@@ -118,7 +124,7 @@ def detect_probes() -> list[str]:
         cfg = INTERFACE_CONFIGS[interface]
         try:
             result = subprocess.run(
-                ["openocd", "-f", cfg, "-c", "init; exit"],
+                ["openocd", "-f", cfg, "-c", "init", "-c", "exit"],
                 capture_output=True, text=True, timeout=4,
             )
         except Exception:
@@ -260,8 +266,9 @@ def build_flash_command(
         if reset:
             program_parts.append("reset")
         program_parts.append("exit")
-        flash_cmd = "init; " + " ".join(program_parts)
-        cmd.extend(["-c", flash_cmd])
+        cmd.extend(["-c", "init"])
+        for part in program_parts:
+            cmd.extend(["-c", part])
 
     return cmd
 

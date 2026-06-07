@@ -40,7 +40,13 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
     if (_candidate / "tool_config.py").exists():
         sys.path.insert(0, str(_candidate))
         break
-from tool_config import get_tool_path, set_tool_path
+try:
+    from tool_config import get_tool_path, set_tool_path
+except ImportError:
+    def get_tool_path(name):
+        return None
+    def set_tool_path(name, path):
+        return None
 
 
 INTERFACE_CONFIGS = {
@@ -146,7 +152,7 @@ def detect_probes() -> list[str]:
         cfg = INTERFACE_CONFIGS[interface]
         try:
             result = subprocess.run(
-                ["openocd", "-f", cfg, "-c", "init; exit"],
+                ["openocd", "-f", cfg, "-c", "init", "-c", "exit"],
                 capture_output=True, text=True, timeout=4,
             )
         except Exception:
@@ -216,6 +222,10 @@ def build_openocd_command(
         print("❌ 调试需要 OpenOCD 配置。")
         print("   请提供 --interface + --target，或 --config。")
         return None
+
+    if not targets:
+        print("ℹ️ 未指定 --target，OpenOCD 可能缺少目标芯片配置。")
+        print("   某些调试器如 RP2350 需要目标配置，例如: --target target/rp2350.cfg")
 
     cmd.extend(["-c", f"gdb_port {gdb_port}"])
     return cmd
