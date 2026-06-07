@@ -41,11 +41,13 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
         sys.path.insert(0, str(_candidate))
         break
 try:
-    from tool_config import get_tool_path, set_tool_path
+    from tool_config import get_tool_path, set_tool_path, find_pico_sdk_openocd_scripts
 except ImportError:
     def get_tool_path(name):
         return None
     def set_tool_path(name, path):
+        return None
+    def find_pico_sdk_openocd_scripts():
         return None
 
 
@@ -77,31 +79,6 @@ class FlashResult:
 # ---------------------------------------------------------------------------
 # OpenOCD 探测
 # ---------------------------------------------------------------------------
-
-def find_pico_sdk_openocd_scripts() -> str | None:
-    """Detect Pico SDK's bundled OpenOCD scripts directory.
-    
-    Pico SDK installs its own OpenOCD with chip-specific target configs
-    (e.g. rp2350.cfg) not available in system OpenOCD.
-    Returns the scripts directory path or None.
-    """
-    pico_openocd = Path.home() / ".pico-sdk" / "openocd"
-    if not pico_openocd.exists():
-        return None
-    for version_dir in sorted(pico_openocd.iterdir(), reverse=True):
-        if not version_dir.is_dir():
-            continue
-        # Binaries can be in root (Windows) or bin/ (Unix)
-        ocd = version_dir / "openocd.exe" if sys.platform == "win32" else version_dir / "bin" / "openocd"
-        if not ocd.exists() and sys.platform != "win32":
-            ocd = version_dir / "openocd"
-        if not ocd.exists():
-            continue
-        scripts = version_dir / "scripts"
-        if scripts.is_dir():
-            return str(scripts)
-    return None
-
 
 def check_openocd() -> tuple[bool, str | None]:
     # 配置文件
