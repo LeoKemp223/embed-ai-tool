@@ -258,6 +258,7 @@ def build_openocd_command(
         print("   某些调试器如 RP2350 需要目标配置，例如: --target target/rp2350.cfg")
 
     cmd.extend(["-c", f"gdb_port {gdb_port}"])
+    cmd.extend(["-c", "init"])
     return cmd
 
 
@@ -285,6 +286,7 @@ def start_openocd(cmd: list[str], gdb_port: int) -> subprocess.Popen | None:
         return None
 
     if wait_for_port(gdb_port):
+        time.sleep(1.5)  # 等待目标芯片初始化完成（特别是双核 RP2350）
         print(f"✅ OpenOCD 已就绪，GDB 端口: {gdb_port}")
         return proc
 
@@ -315,20 +317,19 @@ def generate_gdb_script(
     elf_posix = elf_path.replace("\\", "/")
     lines: list[str] = [
         f"file {elf_posix}",
-        f"target extended-remote localhost:{gdb_port}",
+        f"target remote localhost:{gdb_port}",
     ]
 
     if mode == "download-and-halt":
         lines.extend([
-            "monitor reset halt",
-            "load",
-            "monitor reset halt",
+            "monitor reset init",
             "info registers",
             "backtrace",
             "quit",
         ])
     elif mode == "attach-only":
         lines.extend([
+            "monitor halt",
             "info registers",
             "backtrace",
             "info threads",
