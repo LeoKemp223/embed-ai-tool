@@ -95,7 +95,18 @@ def resolve_script(build_system: str, step: str) -> Path | None:
     mapping = SCRIPT_MAP.get(build_system)
     if not mapping or step not in mapping:
         return None
-    return SKILLS_ROOT / mapping[step]
+    script_path = SKILLS_ROOT / mapping[step]
+    if script_path.exists():
+        return script_path
+    # Fallback: try same directory as this workflow runner
+    # (for flattened skill installations like embed-tool where
+    #  all scripts live under one scripts/ dir)
+    script_name = Path(mapping[step]).name
+    local_script = Path(__file__).resolve().parent / script_name
+    if local_script.exists():
+        return local_script
+    # Return original path (even if nonexistent) for clear error reporting
+    return script_path
 
 
 def check_scripts(build_system: str, steps: list[str]) -> list[tuple[str, Path, bool]]:
