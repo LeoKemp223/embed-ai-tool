@@ -40,7 +40,15 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
     if (_candidate / "tool_config.py").exists():
         sys.path.insert(0, str(_candidate))
         break
-from tool_config import get_tool_path, set_tool_path
+try:
+    from tool_config import get_tool_path, set_tool_path, find_sdk_bundled_openocd_scripts
+except ImportError:
+    def get_tool_path(name):
+        return None
+    def set_tool_path(name, path):
+        return None
+    def find_sdk_bundled_openocd_scripts():
+        return None
 
 
 INTERFACE_CONFIGS = {
@@ -146,7 +154,7 @@ def detect_probes() -> list[str]:
         cfg = INTERFACE_CONFIGS[interface]
         try:
             result = subprocess.run(
-                ["openocd", "-f", cfg, "-c", "init; exit"],
+                ["openocd", "-f", cfg, "-c", "init", "-c", "exit"],
                 capture_output=True, text=True, timeout=4,
             )
         except Exception:
@@ -200,6 +208,11 @@ def build_openocd_command(
 ) -> list[str] | None:
     cmd: list[str] = ["openocd"]
 
+    # 额外 OpenOCD scripts（SDK 自带的芯片特定目标配置）
+    extra_scripts = find_sdk_bundled_openocd_scripts()
+    if extra_scripts:
+        cmd.extend(["-s", extra_scripts])
+
     if interface:
         icfg = INTERFACE_CONFIGS.get(interface)
         if not icfg:
@@ -217,7 +230,12 @@ def build_openocd_command(
         print("   请提供 --interface + --target，或 --config。")
         return None
 
+    if not targets:
+        print("ℹ️ 未指定 --target，OpenOCD 可能缺少目标芯片配置。")
+        print("   部分多核目标芯片需要额外目标配置，例如: --target target/stm32h7x.cfg")
+
     cmd.extend(["-c", f"gdb_port {gdb_port}"])
+    cmd.extend(["-c", "init"])
     return cmd
 
 
@@ -245,6 +263,7 @@ def start_openocd(cmd: list[str], gdb_port: int) -> subprocess.Popen | None:
         return None
 
     if wait_for_port(gdb_port):
+        time.sleep(1.5)  # 等待目标芯片初始化完成（多核目标需更长时间）
         print(f"✅ OpenOCD 已就绪，GDB 端口: {gdb_port}")
         return proc
 
@@ -275,20 +294,19 @@ def generate_gdb_script(
     elf_posix = elf_path.replace("\\", "/")
     lines: list[str] = [
         f"file {elf_posix}",
-        f"target extended-remote localhost:{gdb_port}",
+        f"target remote localhost:{gdb_port}",
     ]
 
     if mode == "download-and-halt":
         lines.extend([
-            "monitor reset halt",
-            "load",
-            "monitor reset halt",
+            "monitor reset init",
             "info registers",
             "backtrace",
             "quit",
         ])
     elif mode == "attach-only":
         lines.extend([
+            "monitor halt",
             "info registers",
             "backtrace",
             "info threads",

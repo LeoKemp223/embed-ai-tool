@@ -118,3 +118,31 @@ def list_tools(
         result[name] = {"path": path, "source": "workspace"}
 
     return result
+
+
+def find_sdk_bundled_openocd_scripts() -> str | None:
+    """探测嵌入式 SDK 自带的 OpenOCD scripts 目录。
+    
+    部分 SDK（如 Raspberry Pi Pico SDK、PlatformIO 等）会安装
+    自己的 OpenOCD，包含芯片特定目标配置文件（系统 OpenOCD 可能没有）。
+    返回 scripts 目录路径，找不到返回 None。
+    
+    跨平台：Windows 用 openocd.exe，macOS/Linux 用 bin/openocd。
+    """
+    import sys as _sys
+    sdk_dir = Path.home() / ".pico-sdk" / "openocd"
+    if not sdk_dir.exists():
+        return None
+    for version_dir in sorted(sdk_dir.iterdir(), reverse=True):
+        if not version_dir.is_dir():
+            continue
+        # Binaries can be in root (Windows) or bin/ (Unix)
+        ocd = version_dir / "openocd.exe" if _sys.platform == "win32" else version_dir / "bin" / "openocd"
+        if not ocd.exists() and _sys.platform != "win32":
+            ocd = version_dir / "openocd"
+        if not ocd.exists():
+            continue
+        scripts = version_dir / "scripts"
+        if scripts.is_dir():
+            return str(scripts)
+    return None
