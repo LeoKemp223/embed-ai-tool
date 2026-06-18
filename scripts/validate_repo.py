@@ -26,7 +26,6 @@ REQUIRED_SKILLS = [
     "flash-openocd",
     "serial-monitor",
     "debug-gdb-openocd",
-    "peripheral-driver",
     "flash-jlink",
     "debug-jlink",
     "memory-analysis",

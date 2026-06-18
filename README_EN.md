@@ -3,9 +3,36 @@
 
 # Fully Automated AI-Driven Hardware Product Development, Debugging, and Testing
 
-A skill set for AI coding assistants, providing LLMs with full-lifecycle MCU firmware development capabilities. Covers multi-toolchain builds (Keil / IAR / CMake / PlatformIO), flashing, GDB debugging, serial monitoring, Modbus / CAN / VISA protocol debugging, peripheral driver adaptation, and pipeline orchestration — supporting Linux, macOS, and Windows.
+A skill set for AI coding assistants, providing LLMs with full-lifecycle MCU firmware development capabilities. Covers multi-toolchain builds (Keil / IAR / CMake / PlatformIO), flashing, GDB debugging, serial monitoring, Modbus / CAN / VISA protocol debugging, and pipeline orchestration — supporting Linux, macOS, and Windows.
 
 <img width="1922" height="1091" alt="image" src="https://github.com/user-attachments/assets/6b23bfb1-8755-4f28-b510-abb7cc80d18f" />
+
+## ⚠ AI Assistant Install Protocol (Required Reading)
+
+> When a user requests "install embed-ai-tool skills", AI assistants (Claude Code / Cursor / Codex, etc.) **MUST** follow this flow. **Never** blindly copy all skills.
+
+### Three Prohibitions
+
+1. **Do NOT** run `install.py` for full install without explicit user confirmation — new default is analyze-only; requires `--skills X Y` or `--yes` to write files
+2. **Do NOT** use `cp -r` / `xcopy` / `Copy-Item` / file explorer to bulk-copy the `skills/` directory into the target project — this pollutes `.claude/skills/`
+3. **Do NOT** bypass `install.py` with other tools (PowerShell, FileExplorer, Robocopy, etc.) to achieve equivalent bulk copy
+
+### Required Flow
+
+1. **Analyze project** — In the target project, run `python3 scripts/install.py /path/to/project` (no install args). The script prints project-type detection + recommended set, **writes nothing**
+2. **Present to user** — Show analysis result + 4 options:
+   - **A. Recommended set** (based on project analysis, typically 5-7 skills)
+   - **B. Install all** (22 skills, `--yes`)
+   - **C. Category-by-category** (6 categories asked in sequence)
+   - **D. Custom** (enter skill names directly)
+3. **Wait for user choice** — Only after explicit selection, run `--skills X Y` or `--yes`
+4. **Report** — List installed skills when done
+
+### Why
+
+The 22 skills cover multiple toolchains (Keil / IAR / ESP-IDF / PlatformIO / CMake / Makefile). A single project typically uses only 4-7 of them. Bulk install pollutes `.claude/skills/`, adds noise to the Claude skill list, and affects project collaborators.
+
+---
 
 ## One-Click Install
 
@@ -15,7 +42,14 @@ In any LLM chat that supports skills, enter:
 Install skills from https://github.com/LeoKemp223/embed-ai-tool.git
 ```
 
-The LLM will present the available skills list, let you choose to install all or select specific ones, then automatically complete the setup.
+The AI assistant will **first analyze your project type** (build system, debugger, protocol hints), then let you choose from 4 options:
+
+- **A. Recommended set** — derived from project analysis, typically 5-7 skills
+- **B. Install all** — 22 skills, suitable for global tooling
+- **C. Category-by-category** — 6 categories asked in sequence
+- **D. Custom** — enter skill names directly
+
+Installation only runs after your choice, avoiding project directory pollution. See "AI Assistant Install Protocol" above.
 
 ## npx Install (Recommended)
 
@@ -50,12 +84,28 @@ npx skills remove -g        # Remove
 - Python 3.8+ (no third-party dependencies required)
 - Git
 
-### Install All Skills
+### Step 1: Analyze Project Type (default behavior)
 
 ```bash
 git clone https://github.com/LeoKemp223/embed-ai-tool.git
 python3 embed-ai-tool/scripts/install.py /path/to/your-project
 ```
+
+The script prints project characteristics (build system, debugger, protocols) and a recommended skill set. **Writes nothing to disk.**
+
+### Step 2: Install Recommended Set
+
+```bash
+python3 embed-ai-tool/scripts/install.py /path/to/your-project --skills build-cmake flash-openocd debug-gdb-openocd serial-monitor workflow
+```
+
+### Or Install All (when you're sure you want all 22)
+
+```bash
+python3 embed-ai-tool/scripts/install.py /path/to/your-project --yes
+```
+
+> ⚠ `--yes` copies all 22 skills into the target project's `.claude/skills/`. Only recommended for global installs or tooling scenarios.
 
 ### Install Specific Skills
 
@@ -135,8 +185,6 @@ python3 scripts/em_config.py path
 | `modbus-debug` | Modbus RTU/TCP register read/write, slave scanning, and continuous monitoring |
 | `can-debug` | CAN bus frame monitoring, sending, and node scanning |
 | `visa-debug` | VISA instrument SCPI communication, waveform capture, and screenshots |
-| `peripheral-driver` | Search and adapt open-source BSP peripheral drivers to target projects |
-| `stm32-hal-development` | STM32 HAL library development guidance and best practices |
 | `workflow` | Pipeline orchestration chaining multiple skills (build + flash + monitor/debug) |
 | `build-idf` | Configure target chip and build ESP-IDF firmware projects |
 | `memory-analysis` | Parse .map files or ELF to generate memory usage reports and symbol size rankings |
@@ -207,8 +255,6 @@ After installing skills, trigger them with natural language or direct skill comm
 │   ├── modbus-debug/           # Modbus debug
 │   ├── can-debug/              # CAN bus debug
 │   ├── visa-debug/             # VISA instrument debug
-│   ├── peripheral-driver/      # Peripheral driver adaptation
-│   ├── stm32-hal-development/  # STM32 HAL development
 │   ├── workflow/               # Pipeline orchestration
 │   ├── build-idf/              # ESP-IDF build
 │   ├── flash-idf/              # ESP-IDF flash

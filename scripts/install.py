@@ -2,12 +2,14 @@
 """embed-ai-tool 安装脚本 — 零依赖，仅标准库。
 
 用法：
-    python3 scripts/install.py /path/to/project              # 安装全部 skill
+    python3 scripts/install.py /path/to/project              # 默认：分析工程，输出推荐集（不安装）
     python3 scripts/install.py /path/to/project --skills build-cmake flash-openocd
+    python3 scripts/install.py /path/to/project --yes         # 确认全量安装
     python3 scripts/install.py /path/to/project --force       # 强制覆盖
     python3 scripts/install.py /path/to/project --detect      # 安装后探测工具路径
     python3 scripts/install.py /path/to/project --uninstall   # 卸载
     python3 scripts/install.py /path/to/project --status      # 查看安装状态
+    python3 scripts/install.py /path/to/project --analyze     # 显式只分析不安装
     python3 scripts/install.py --list                         # 列出可用 skill
 """
 
@@ -21,6 +23,14 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Windows 中文控制台默认 GBK 编码，强制 stdout/stderr 用 UTF-8 避免 emoji 崩溃
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_SRC = REPO_ROOT / "skills"
@@ -143,6 +153,133 @@ def _save_meta(project: Path, meta: dict) -> None:
 
 
 # ── Commands ─────────────────────────────────────────────────────────
+
+
+# 工程分析规则：文件特征 → (标签, 关联 skill 列表)
+# 顺序即优先级，构建系统一旦命中就不再检查低优先级规则
+ANALYZE_RULES_BUILD = [
+    (("*.uvprojx", "*.uvproj"), "Keil MDK", ["build-keil", "flash-keil"]),
+    (("*.ewp", "*.eww"), "IAR EWARM", ["build-iar"]),
+    (("platformio.ini",), "PlatformIO", ["build-platformio", "flash-platformio", "debug-platformio"]),
+    (("sdkconfig",), "ESP-IDF", ["build-idf", "flash-idf"]),
+    (("CMakeLists.txt",), "CMake", ["build-cmake"]),
+    (("Makefile", "makefile", "GNUmakefile"), "Makefile", ["build-makefile"]),
+]
+
+ANALYZE_TOOLS_CHAIN = [
+    ("arm-none-eabi-gcc", "ARM Cortex-M"),
+    ("xtensa-esp32-elf-gcc", "ESP32 (Xtensa)"),
+    ("riscv64-unknown-elf-gcc", "RISC-V"),
+]
+
+ANALYZE_DEBUGGERS = [
+    ("JLinkExe", "J-Link", ["flash-jlink", "debug-jlink"]),
+]
+
+
+def _glob_any(project: Path, patterns: tuple[str, ...]) -> bool:
+    for pat in patterns:
+        if any(project.glob(pat)):
+            return True
+    return False
+
+
+def cmd_analyze(project: Path) -> None:
+    """分析工程类型，输出推荐安装的 skill 集，不执行任何写入。"""
+    print(f"工程分析：{project}\n")
+
+    detected: list[tuple[str, str, list[str]]] = []
+
+    # 构建系统（命中即停，避免混合工程误判）
+    build_hit = False
+    for patterns, label, skills in ANALYZE_RULES_BUILD:
+        # ESP-IDF 需要额外检查 components/
+        if label == "ESP-IDF" and not (project / "components").is_dir():
+            continue
+        # Makefile 仅在没有 CMakeLists.txt 时才算
+        if label == "Makefile" and (project / "CMakeLists.txt").is_file():
+            continue
+        if _glob_any(project, patterns):
+            detected.append(("构建系统", label, skills))
+            build_hit = True
+            break
+
+    # 调试器
+    launch_json = project / ".vscode" / "launch.json"
+    if launch_json.is_file():
+        try:
+            text = launch_json.read_text(encoding="utf-8", errors="ignore")
+            if "openocd" in text.lower():
+                detected.append(("调试器", "OpenOCD（launch.json）", ["flash-openocd", "debug-gdb-openocd"]))
+        except OSError:
+            pass
+    if (project / "openocd.cfg").is_file() or (project / "openocd.cfg.in").is_file():
+        detected.append(("调试器", "OpenOCD 配置存在", ["flash-openocd", "debug-gdb-openocd"]))
+    if _glob_any(project, ("*.jlink",)):
+        detected.append(("调试器", "J-Link（.jlink 文件）", ["flash-jlink", "debug-jlink"]))
+    else:
+        for tool, label in [("JLinkExe", "J-Link")]:
+            if shutil.which(tool):
+                detected.append(("调试器", f"{label}（PATH 可用）", ["flash-jlink", "debug-jlink"]))
+                break
+
+    # 工具链
+    for tool, label in ANALYZE_TOOLS_CHAIN:
+        if shutil.which(tool):
+            detected.append(("工具链", label, []))
+
+    # 推荐集：默认含 serial-monitor + workflow，叠加探测到的 skill
+    available = set(_available_skills())
+    recommended = {"serial-monitor", "workflow"}
+    for _, _, skills in detected:
+        recommended.update(skills)
+
+    # 协议线索（粗扫 main.c，不递归）
+    main_candidates = ["main.c", "Src/main.c", "Core/Src/main.c", "src/main.c", "main/main.c"]
+    for rel in main_candidates:
+        main_c = project / rel
+        if main_c.is_file():
+            try:
+                text = main_c.read_text(encoding="utf-8", errors="ignore")
+                if "FreeRTOS.h" in text or "rtthread.h" in text or "zephyr.h" in text:
+                    recommended.add("rtos-debug")
+                if "modbus" in text.lower() or 'mb.h' in text:
+                    recommended.add("modbus-debug")
+                if "CAN" in text and ("HAL_CAN" in text or "can_" in text.lower()):
+                    recommended.add("can-debug")
+                if "viOpen" in text or "viWrite" in text:
+                    recommended.add("visa-debug")
+            except OSError:
+                pass
+            break
+
+    # 内存分析（几乎都能产 .map）
+    recommended.add("memory-analysis")
+
+    # 输出
+    if not detected:
+        print("  [!] 未识别出明确工程类型（构建系统 / 调试器 / 工具链 均未命中）\n")
+    else:
+        print("  检测到工程特征：")
+        for category, label, _ in detected:
+            print(f"    • {category}：{label}")
+        print()
+
+    # 过滤掉仓库里不存在的 skill
+    rec_sorted = sorted(s for s in recommended if s in available)
+
+    if not rec_sorted:
+        print("  无可推荐的 skill（仓库可能未正确克隆）。")
+        return
+
+    print(f"  推荐安装集（{len(rec_sorted)} 个）：")
+    print(f"    {' '.join(rec_sorted)}\n")
+
+    print("  下一步操作：")
+    print(f"    按推荐集安装：python3 scripts/install.py {project} --skills {' '.join(rec_sorted)}")
+    print(f"    全量安装（{len(available)} 个）：python3 scripts/install.py {project} --yes")
+    print(f"    查看全部 skill：python3 scripts/install.py --list")
+    print(f"    只分析不安装：python3 scripts/install.py {project} --analyze")
 
 
 def cmd_list() -> None:
@@ -358,7 +495,13 @@ def main() -> None:
         "--skills",
         nargs="+",
         metavar="SKILL",
-        help="只安装指定 skill（默认安装全部）",
+        help="只安装指定 skill（默认行为已改为只分析不安装）",
+    )
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        dest="yes_all",
+        help="确认全量安装全部 skill（默认行为已改为只分析不安装）",
     )
     parser.add_argument(
         "--force",
@@ -380,6 +523,11 @@ def main() -> None:
         "--status",
         action="store_true",
         help="显示当前安装状态",
+    )
+    parser.add_argument(
+        "--analyze",
+        action="store_true",
+        help="只分析工程类型并输出推荐集，不执行安装",
     )
     parser.add_argument(
         "--detect",
@@ -410,7 +558,17 @@ def main() -> None:
         cmd_status(project)
         return
 
-    # 默认动作：安装
+    if args.analyze:
+        cmd_analyze(project)
+        return
+
+    # 默认行为：未指定 --skills 且未指定 --yes 时，只分析不安装
+    if not args.skills and not args.yes_all:
+        print("[!] 未指定 --skills 或 --yes，默认只执行工程分析，不写入任何文件。\n")
+        cmd_analyze(project)
+        return
+
+    # 执行安装
     cmd_install(project, args.skills, args.force)
 
     if args.detect:

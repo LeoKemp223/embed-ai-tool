@@ -13,17 +13,146 @@ metadata:
 
 ## 一、安装引导
 
-当用户请求安装本仓库的 skill 时，按以下流程引导。不要跳过询问直接安装。
+当用户请求安装本仓库的 skill 时，按以下流程引导。**不要跳过询问直接安装**，也不要替用户决定安装内容——先分析工程，再让用户选。
 
 ### 流程
 
-1. 向用户展示下面的 **可用技能列表**
-2. 询问用户选择安装方式：
-   - **全部安装** — 安装所有 24 个 skill
-   - **按需安装** — 用户指定要安装的 skill 名称
-3. 根据用户选择执行对应的安装命令
+1. **分析工程** — 探测当前工作区的工程特征（构建系统、工具链、探针、协议线索等），详见"工程分析项"
+2. **呈现分析结果** — 把探测到的事实客观列给用户，未识别出的也要明确说明
+3. **提供选项** — 基于分析结果给出可选安装方案（推荐集 / 全部 / 按分类 / 自定义），让用户选择，详见"提供的安装选项"
+4. **执行安装** — 根据用户选择执行对应命令；用户可在推荐集基础上增删，不必重走流程
 
-### 可用技能
+### 工程分析项
+
+按工作区文件特征推断工程画像，规则优先级从高到低：
+
+| 类别 | 文件特征 | 推断结论 | 关联 skill |
+|------|----------|----------|-----------|
+| 构建系统 | `*.uvprojx` / `*.uvproj` | Keil MDK | `build-keil` `flash-keil` |
+| 构建系统 | `*.ewp` / `*.eww` | IAR EWARM | `build-iar` |
+| 构建系统 | `platformio.ini` | PlatformIO | `build-platformio` `flash-platformio` `debug-platformio` |
+| 构建系统 | `sdkconfig` + `components/` | ESP-IDF | `build-idf` `flash-idf` |
+| 构建系统 | `CMakeLists.txt` + `*.cmake` | CMake | `build-cmake` |
+| 构建系统 | `Makefile`（无 CMakeLists.txt） | Makefile | `build-makefile` |
+| 工具链 | PATH 含 `arm-none-eabi-gcc` | ARM Cortex-M 目标 | — |
+| 工具链 | PATH 含 `xtensa-esp32-elf-gcc` | ESP32 (Xtensa) 目标 | — |
+| 工具链 | PATH 含 `riscv64-unknown-elf-gcc` | RISC-V 目标 | — |
+| 调试器 | `.vscode/launch.json` 含 `openocd` | OpenOCD | `flash-openocd` `debug-gdb-openocd` |
+| 调试器 | `*.jlink` 文件或 JLinkExe 在 PATH | J-Link | `flash-jlink` `debug-jlink` |
+| 调试器 | `openocd.cfg` / `openocd.cfg.in` 存在 | OpenOCD 配置 | `flash-openocd` `debug-gdb-openocd` |
+| 协议 | 源码含 `#include "modbus.h"` 或 `mb.h` | 使用 Modbus | `modbus-debug` |
+| 协议 | 源码含 CAN HAL 驱动引用 | 使用 CAN 总线 | `can-debug` |
+| 协议 | `main.c` 引用 `stdio` / UART 重定向 | 使用串口日志 | `serial-monitor` |
+| 协议 | 源码含 `viOpen` / `viWrite` | 使用 SCPI 仪器 | `visa-debug` |
+| RTOS | 源码含 `FreeRTOS.h` / `rtthread.h` / `zephyr.h` | 使用 RTOS | `rtos-debug` |
+| 内存 | 工程能产出 `.map` / `.elf` | 可做内存分析 | `memory-analysis` |
+
+**探测失败时**：如果工作区特征不明显（纯裸 C 文件、混合工程、空目录），直接告知用户"未识别出明确工程类型"，建议选"全部安装"或"自定义"——不要硬推推荐集。
+
+### 推荐集映射
+
+按识别到的工程画像给出基础推荐集（用户可在其上增删）：
+
+| 工程类型 | 基础推荐集 |
+|---------|-----------|
+| Keil MDK | `build-keil` `flash-keil` `serial-monitor` `debug-gdb-openocd` `workflow` |
+| IAR EWARM | `build-iar` `flash-openocd` `serial-monitor` `workflow` |
+| PlatformIO | `build-platformio` `flash-platformio` `debug-platformio` `serial-monitor` `workflow` |
+| ESP-IDF | `build-idf` `flash-idf` `serial-monitor` `debug-gdb-openocd` `workflow` |
+| CMake | `build-cmake` `flash-openocd` `debug-gdb-openocd` `serial-monitor` `workflow` |
+| Makefile | `build-makefile` `flash-openocd` `serial-monitor` `workflow` |
+
+基础集是起点，根据"工程分析项"探测到的协议线索继续追加：
+
+- 检测到 RTOS → 追加 `rtos-debug`
+- 检测到 Modbus → 追加 `modbus-debug`
+- 检测到 CAN → 追加 `can-debug`
+- 检测到 VISA / SCPI → 追加 `visa-debug`
+- 工程能产 `.map` / `.elf` → 追加 `memory-analysis`
+
+### 提供的安装选项
+
+分析完成后，向用户呈现 4 个并列选项：
+
+| 选项 | 说明 |
+|------|------|
+| **A. 推荐集** | 基于工程分析得出的最小集（通常 5-8 个），可在此基础上增删 |
+| **B. 全部安装** | 安装全部 22 个 skill，适合全局工具人 / 教学场景 |
+| **C. 按分类逐一勾选** | 按 6 个分类顺序逐一询问，每类下用户可全选、跳过或勾选部分（详见"分类逐一勾选流程"） |
+| **D. 自定义** | 用户直接输入 skill 名或编号，自由组合 |
+
+用户选 A 后仍可微调（如"再加个 modbus-debug"），不要重走一遍流程。
+
+### 分类逐一勾选流程
+
+用户选 C 后，按 6 个分类顺序逐一询问。每个分类独立交互，用户可全选、跳过或勾选部分。基于工程分析预先勾选推荐项，降低决策成本。
+
+**分类顺序与内容：**
+
+| 序号 | 分类 | 包含 skill（数量） | 默认勾选规则（基于工程分析） |
+|------|------|------------------|---------------------------|
+| 1 | 构建 | build-cmake / build-keil / build-iar / build-platformio / build-idf / build-makefile（6） | 勾选识别到的构建系统对应项，其余不勾 |
+| 2 | 烧录 | flash-keil / flash-openocd / flash-platformio / flash-idf / flash-jlink（5） | 勾选识别到的探针 / 工具链对应项 |
+| 3 | 调试 | debug-gdb-openocd / debug-jlink / debug-platformio / rtos-debug（4） | 勾选识别到的调试器对应项；检测到 RTOS 时勾 `rtos-debug` |
+| 4 | 通信 | serial-monitor / modbus-debug / can-debug / visa-debug（4） | 默认勾 `serial-monitor`；按协议线索勾 `modbus` / `can` / `visa` |
+| 5 | 分析 | memory-analysis / static-analysis（2） | 工程能产 `.map` / `.elf` 时勾 `memory-analysis` |
+| 6 | 编排 | workflow（1） | 默认勾选 |
+
+**单次分类询问格式：**
+
+```
+[2/6] 烧录（5 个 skill）：
+
+   ✅ 1. flash-openocd    — OpenOCD 烧录（识别到 .vscode/launch.json）
+   ☐  2. flash-keil       — Keil MDK 烧录
+   ☐  3. flash-jlink      — SEGGER J-Link 烧录
+   ☐  4. flash-platformio — PlatformIO 上传
+   ☐  5. flash-idf        — ESP-IDF 串口烧录
+
+   操作：回车确认默认 / 输入编号增删（如 +3 -1）/ "全选" / "跳过"
+
+👤 +3
+
+🤖 [3/6] 调试（4 个 skill）：
+   ...
+```
+
+**完成所有分类后**：汇总最终选定的 skill 列表，让用户确认或微调，然后执行安装。
+
+如果用户对某个分类无任何勾选且工程分析也没识别到，应主动确认"跳过 X 分类？"避免遗漏关键能力（比如构建和烧录通常必须）。
+
+### 安装示例
+
+```
+👤 帮我安装 embed-ai-tool 的 skill
+
+🤖 正在分析当前工程...
+
+   检测到工程特征：
+   • 构建系统：CMake（CMakeLists.txt）
+   • 目标架构：ARM Cortex-M（PATH 含 arm-none-eabi-gcc）
+   • 调试器配置：OpenOCD + ST-Link（.vscode/launch.json）
+   • 协议线索：UART stdio 重定向（main.c）
+   • RTOS：未检测到
+
+   可选安装方案：
+
+   A. 推荐集（6 个）— build-cmake / flash-openocd / debug-gdb-openocd / serial-monitor / memory-analysis / workflow
+   B. 全部安装（22 个）
+   C. 按分类逐一勾选（6 个分类顺序询问）
+   D. 自定义（输入 skill 名或编号）
+
+   请选择（A / B / C / D）：
+
+👤 A，再加个 rtos-debug
+
+🤖 安装：build-cmake / flash-openocd / debug-gdb-openocd / serial-monitor / memory-analysis / workflow / rtos-debug
+   执行中...
+```
+
+### 可用技能列表
+
+> 完整技能清单，用于"按分类选（C）"和"自定义（D）"时参考。推荐集（A）的子集由"工程分析项"和"推荐集映射"自动推导。
 
 | 分类 | 技能 | 说明 |
 |------|------|------|
@@ -48,8 +177,6 @@ metadata:
 | 通信 | `visa-debug` | VISA 仪器 SCPI 通信、波形捕获和截图 |
 | 分析 | `memory-analysis` | .map/ELF 内存使用报告与符号排名 |
 | 分析 | `static-analysis` | cppcheck/clang-tidy 静态分析，MISRA-C 合规 |
-| 开发 | `peripheral-driver` | 搜索并适配开源 BSP 外设驱动 |
-| 开发 | `stm32-hal-development` | STM32 HAL 库开发指导与最佳实践 |
 | 编排 | `workflow` | 串联编译+烧录+监控/调试的流水线 |
 
 ### 安装命令

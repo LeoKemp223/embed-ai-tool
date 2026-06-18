@@ -1,4 +1,0 @@
-interface:
-  display_name: "STM32 HAL 开发"
-  short_description: "指导基于 CubeMX 和 HAL 库的 STM32 固件开发。"
-  default_prompt: "使用 stm32-hal-development skill，在 CubeMX 工程中规划或实现所需的 HAL 功能，确保代码在 USER CODE 区域内，遵循 BSP 分层架构，并按需引用参考文档。"
