@@ -3,7 +3,7 @@
 
 # Fully Automated AI-Driven Hardware Product Development, Debugging, and Testing
 
-A skill set for AI coding assistants, providing LLMs with full-lifecycle MCU firmware development capabilities. Covers multi-toolchain builds (Keil / IAR / CMake / PlatformIO), flashing, GDB debugging, serial monitoring, Modbus / CAN / VISA protocol debugging, and pipeline orchestration — supporting Linux, macOS, and Windows.
+A skill set for AI coding assistants, providing LLMs with full-lifecycle MCU firmware development capabilities. Covers multi-toolchain builds (Keil / IAR / CMake / PlatformIO), flashing, GDB debugging, serial monitoring, shell interaction, Modbus / CAN / VISA protocol debugging, and pipeline orchestration — supporting Linux, macOS, and Windows.
 
 <img width="1922" height="1091" alt="image" src="https://github.com/user-attachments/assets/6b23bfb1-8755-4f28-b510-abb7cc80d18f" />
 
