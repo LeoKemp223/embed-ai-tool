@@ -39,6 +39,15 @@ python3 skills/flash-jlink/scripts/jlink_flasher.py \
 
 ## 常见模式
 
+### 0. 新会话恢复
+
+```bash
+python3 skills/flash-jlink/scripts/jlink_flasher.py --resume
+```
+
+成功烧录后缓存 artifact、device、interface、speed 和 BIN 基地址；脚本启动即自动复用这些缓存参数（显式参数优先）；无缓存或缓存失效时自动回退，例如 探测或重新指定设备。
+
+
 ### 1. 环境探测
 
 ```bash
@@ -96,6 +105,12 @@ RTT 是 J-Link 独有功能，通过调试口传输日志，不占用 UART，速
 | `--rtt` | 启动 RTT 日志捕获 |
 | `--rtt-duration` | RTT 捕获时长（秒，默认 10） |
 | `--save-config` | 探测成功后保存工具路径到配置 |
+| `--resume` | 从工程根目录 `.em_skill.json` 的缓存 profile 恢复上次成功参数 |
+| `--profile` | 指定缓存 profile 名，默认 `default` |
+| `--workspace` | 指定工程根目录，profile 固定读写该目录下的 `.em_skill.json` |
+| `--show-profile` | 输出当前缓存 profile 并退出 |
+| `--clear-profile` | 删除当前缓存 profile 并退出 |
+| `--no-save-profile` | 成功后不更新缓存 profile |
 | `-v`, `--verbose` | 输出详细日志 |
 
 ## JLinkExe 查找顺序

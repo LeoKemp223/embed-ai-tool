@@ -42,9 +42,18 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
         sys.path.insert(0, str(_candidate))
         break
 from tool_config import get_tool_path, set_tool_path
+from profile_store import (
+    add_profile_args,
+    handle_profile_actions,
+    print_resume_hint,
+    resume_profile,
+    resolve_profile_workspace,
+    save_profile,
+)
 
 
 ARTIFACT_PRIORITY = {"elf": 1, "hex": 2, "bin": 3}
+SKILL_NAME = "build-makefile"
 ARTIFACT_EXTENSIONS = {".elf": "elf", ".hex": "hex", ".bin": "bin", ".axf": "elf", ".out": "elf"}
 MAKE_NAMES = ["make", "gmake", "mingw32-make"]
 MAKEFILE_NAMES = ["Makefile", "makefile", "GNUmakefile"]
@@ -512,6 +521,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--clean", action="store_true", help="构建前执行 make clean")
     parser.add_argument("--extra-args", action="append", default=[], help="传递给 make 的额外参数（可重复）")
     parser.add_argument("--save-config", action="store_true", help="探测成功后保存工具路径到配置")
+    add_profile_args(parser)
     parser.add_argument("-v", "--verbose", action="store_true", help="详细构建输出（V=1）")
     parser.add_argument("-j", "--jobs", type=int, help="并行构建任务数")
     return parser
@@ -520,6 +530,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    profile_workspace = resolve_profile_workspace(args, __file__)
+    handle_profile_actions(args, profile_workspace, SKILL_NAME)
+    resume_profile(args, profile_workspace, SKILL_NAME, {"source": "source", "makefile": "makefile", "target": "target", "build_dir": "build_dir"})
 
     # 环境探测模式
     if args.detect:
@@ -664,6 +678,18 @@ def main() -> int:
         evidence=evidence,
     )
     print_build_report(result)
+    if not args.no_save_profile:
+        cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
+            "source": str(source_dir),
+            "makefile": str(makefile_path),
+            "target": args.target,
+            "build_dir": str(scan_dir),
+            "artifact_path": str(result.primary_artifact.path.resolve()),
+            "artifact_kind": result.primary_artifact.kind,
+            "toolchain": info.toolchain_family,
+            "target_mcu": guess_mcu(info),
+        })
+        print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile)
     return 0
 
 

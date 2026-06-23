@@ -19,6 +19,7 @@ description: 当需要通过 Keil MDK 命令行编译嵌入式工程，调用自
 
 ## 自动探测
 
+- 脚本启动即自动复用工程根目录 `.em_skill.json` 中上次成功的 profile 作为默认参数（显式参数优先，无需先手动传 `--resume`）；`--resume` 仅用于断言缓存必须存在，无缓存则非零退出。无缓存或用户明确要求重新探测时，脚本自动回退到正常扫描。
 - 脚本自动搜索常见 Keil MDK 安装路径和环境变量（`KEIL_ROOT`、`MDK_ROOT`）定位 UV4.exe。
 - 解析 `.uvprojx` 工程文件中的 Target 列表，提取芯片型号、输出目录、工具链（ARMCC/ARMCLANG）。
 - 若未指定目标，默认使用工程中的第一个 Target。

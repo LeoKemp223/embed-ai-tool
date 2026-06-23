@@ -50,7 +50,16 @@ if _BUILD_KEIL_SCRIPTS.is_dir():
 
 from keil_builder import find_uv4, detect_environment, parse_project, is_windows
 from tool_config import get_tool_path, set_tool_path
+from profile_store import (
+    add_profile_args,
+    handle_profile_actions,
+    print_resume_hint,
+    resume_profile,
+    resolve_profile_workspace,
+    save_profile,
+)
 
+SKILL_NAME = "flash-keil"
 try:
     import xml.etree.ElementTree as ET
 except ImportError:
@@ -262,6 +271,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--uv4", help="显式指定 UV4.exe 路径")
     parser.add_argument("--save-config", action="store_true", help="保存工具路径到配置")
     parser.add_argument("--log", help="烧录日志输出路径")
+    add_profile_args(parser)
     parser.add_argument("-v", "--verbose", action="store_true", help="详细输出")
     return parser
 
@@ -269,6 +279,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    profile_workspace = resolve_profile_workspace(args, __file__)
+    handle_profile_actions(args, profile_workspace, SKILL_NAME)
+    resume_profile(args, profile_workspace, SKILL_NAME, {"project": "project", "target": "target", "uv4": "uv4"})
 
     if not args.detect and not args.flash:
         if args.project:
@@ -345,6 +359,15 @@ def main() -> int:
     flash_result.debugger = debugger
 
     print_flash_report(flash_result)
+    if flash_result.status == "success" and not args.no_save_profile:
+        cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
+            "project": str(project_path),
+            "target": selected.name,
+            "uv4": uv4_path,
+            "artifact_path": flash_result.artifact_path,
+            "debugger": debugger,
+        })
+        print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile, "--flash")
     return 0 if flash_result.status == "success" else 1
 
 

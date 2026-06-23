@@ -22,17 +22,19 @@ description: 当需要配置或构建基于 CMake 的嵌入式固件工程，调
 - 若存在 `CMakePresets.json`，优先使用脚本的 `--list-presets` 列出并选择预设。
 - 否则检查 `CMakeLists.txt`、已有构建目录和工具链文件。
 - 若已有成功的构建目录且与当前意图一致，优先复用。
+- 脚本启动即自动读取 `.em_skill.json` 中的 `skill_profiles.build-cmake`，把上次成功构建参数作为默认值复用（显式参数优先，无需先手动传 `--resume`）；`--resume` 仅用于断言缓存必须存在，无缓存则非零退出。无缓存或用户要求重新探测时，脚本自动回退到 `--detect`、`--list-presets` 或手动参数探索。
 - 生成器由脚本自动探测，优先 `Ninja`，其次是宿主机上已安装的 Make 工具。
 - 对调试导向请求默认使用 `Debug`，否则默认使用 `RelWithDebInfo`。
 
 ## 执行步骤
 
-1. 先阅读 [references/usage.md](references/usage.md)，确认本次是环境探测、列出预设、执行构建，还是仅扫描产物。
-2. 若不确定环境是否就绪，先运行自带脚本 [scripts/cmake_builder.py](scripts/cmake_builder.py) 的 `--detect` 模式确认。
-3. 若存在 CMakePresets.json，使用 `--list-presets` 列出预设，再用 `--preset <name>` 构建。
-4. 若无预设，使用 `--source`、`--build-dir`、`--generator`、`--build-type`、`--toolchain` 手动配置构建。
-5. 读取脚本输出的构建结果和产物扫描报告，重点关注首选产物（ELF > HEX > BIN）和失败分类。
-6. 将构建目录、产物路径、产物类型和生成器信息写回 `Project Profile`，并在需要时交给下游 skill。
+1. 先阅读 [references/usage.md](references/usage.md)，确认本次是执行构建、环境探测、列出预设，还是仅扫描产物。
+2. 直接运行目标动作即可——脚本启动时会自动复用工程根目录 `.em_skill.json` 中上次成功构建的源码目录、构建目录、预设、目标和产物信息（显式参数优先）。仅当需要断言缓存必须存在时才加 `--resume --profile default`。
+3. 若无缓存或用户要求重新探测，脚本自动回退到 `--detect`、`--list-presets` 或手动参数探索。
+4. 若存在 CMakePresets.json，使用 `--list-presets` 列出预设，再用 `--preset <name>` 构建。
+5. 若无预设，使用 `--source`、`--build-dir`、`--generator`、`--build-type`、`--toolchain` 手动配置构建。
+6. 读取脚本输出的构建结果和产物扫描报告，重点关注首选产物（ELF > HEX > BIN）和失败分类。
+7. 成功构建后脚本会自动更新工程根目录 `.em_skill.json` 的 `skill_profiles.build-cmake.default`；将构建目录、产物路径、产物类型和生成器信息同步到 `Project Profile`，并在需要时交给下游 skill。
 
 ## 失败分流
 
@@ -50,6 +52,7 @@ description: 当需要配置或构建基于 CMake 的嵌入式固件工程，调
 ## 输出约定
 
 - 输出配置命令、构建命令、构建目录、所选生成器和首选产物路径。
+- 成功构建后持久化 `source`、`build_dir`、`preset`、`generator`、`build_type`、`toolchain`、`target` 和首选产物到工程根目录 `.em_skill.json`。
 - 用 `artifact_path`、`artifact_kind` 和探测到的工具链细节更新 `Project Profile`。
 - 成功后推荐 `flash-openocd` 或 `debug-gdb-openocd`。
 

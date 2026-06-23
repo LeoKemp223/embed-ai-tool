@@ -19,6 +19,7 @@ description: 当需要编译基于裸 Makefile 的嵌入式固件工程（无 CM
 
 ## 自动探测
 
+- 脚本启动即自动复用工程根目录 `.em_skill.json` 中上次成功的 profile 作为默认参数（显式参数优先，无需先手动传 `--resume`）；`--resume` 仅用于断言缓存必须存在，无缓存则非零退出。无缓存或用户明确要求重新探测时，脚本自动回退到正常扫描。
 - 若工作区根目录存在 `Makefile` / `makefile` / `GNUmakefile`，脚本自动识别。
 - 解析 Makefile 变量：`CROSS_COMPILE`、`CC`、`TARGET`、`MCU`、`BOARD`、`CFLAGS`、`LDFLAGS` 等。
 - 从 `CROSS_COMPILE` 前缀推断工具链家族（`arm-none-eabi-` → `gnu-arm`，`riscv32-unknown-elf-` → `gnu-riscv`，`xtensa-esp32-elf-` → `gnu-esp`）。

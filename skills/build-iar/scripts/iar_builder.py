@@ -39,6 +39,14 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
         sys.path.insert(0, str(_candidate))
         break
 from tool_config import get_tool_path, set_tool_path
+from profile_store import (
+    add_profile_args,
+    handle_profile_actions,
+    print_resume_hint,
+    resume_profile,
+    resolve_profile_workspace,
+    save_profile,
+)
 
 try:
     import xml.etree.ElementTree as ET
@@ -46,6 +54,7 @@ except ImportError:
     ET = None  # type: ignore[assignment,misc]
 
 ARTIFACT_EXTENSIONS = {".out": "elf", ".elf": "elf", ".hex": "hex", ".bin": "bin"}
+SKILL_NAME = "build-iar"
 ARTIFACT_PRIORITY = {"elf": 1, "hex": 2, "bin": 3}
 PROJECT_EXTENSIONS = {".ewp", ".eww"}
 
@@ -462,6 +471,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--iar-root", help="显式指定 IAR 安装根目录")
     parser.add_argument("--save-config", action="store_true", help="探测成功后保存工具路径到配置")
     parser.add_argument("--parallel", type=int, help="并行编译任务数")
+    add_profile_args(parser)
     parser.add_argument("-v", "--verbose", action="store_true", help="详细输出")
     return parser
 
@@ -469,6 +479,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    profile_workspace = resolve_profile_workspace(args, __file__)
+    handle_profile_actions(args, profile_workspace, SKILL_NAME)
+    resume_profile(args, profile_workspace, SKILL_NAME, {"project": "project", "config": "config", "iarbuild": "iarbuild"})
 
     # 环境探测
     if args.detect:
@@ -645,6 +659,17 @@ def main() -> int:
         evidence=evidence,
     )
     print_build_report(result)
+    if not args.no_save_profile:
+        cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
+            "project": str(project_path),
+            "config": selected.name,
+            "iarbuild": iarbuild_path,
+            "artifact_path": str(result.primary_artifact.path.resolve()),
+            "artifact_kind": result.primary_artifact.kind,
+            "target_mcu": selected.device,
+            "toolchain": selected.toolchain,
+        })
+        print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile)
     return 0
 
 

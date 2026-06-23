@@ -32,6 +32,15 @@ python3 skills/build-idf/scripts/idf_builder.py --clean --project /path/to/proje
 
 ## 常见模式
 
+### 0. 新会话恢复
+
+```bash
+python3 skills/build-idf/scripts/idf_builder.py --build --resume
+```
+
+成功构建后缓存 `project`、目标芯片、构建目录和首选产物；脚本启动即自动复用这些缓存参数（显式参数优先）；无缓存或缓存失效时自动回退，例如 `--detect` 或重新指定 `--project`。
+
+
 ### 1. 环境探测
 
 ```bash
@@ -73,6 +82,12 @@ python3 skills/build-idf/scripts/idf_builder.py --build --project /repo/fw
 | `--set-target` | 设置目标芯片（esp32、esp32s2、esp32s3、esp32c2、esp32c3、esp32c5、esp32c6、esp32c61、esp32h2、esp32p4） |
 | `--clean` | 执行 fullclean |
 | `--scan-artifacts` | 仅扫描指定目录中的构建产物 |
+| `--resume` | 从工程根目录 `.em_skill.json` 的缓存 profile 恢复上次成功参数 |
+| `--profile` | 指定缓存 profile 名，默认 `default` |
+| `--workspace` | 指定工程根目录，profile 固定读写该目录下的 `.em_skill.json` |
+| `--show-profile` | 输出当前缓存 profile 并退出 |
+| `--clear-profile` | 删除当前缓存 profile 并退出 |
+| `--no-save-profile` | 成功后不更新缓存 profile |
 | `-v`, `--verbose` | 详细输出 |
 
 ## 返回码

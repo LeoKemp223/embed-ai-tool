@@ -42,7 +42,16 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
         break
 from tool_config import get_tool_path, set_tool_path
 from idf_env import get_idf_env
+from profile_store import (
+    add_profile_args,
+    handle_profile_actions,
+    print_resume_hint,
+    resume_profile,
+    resolve_profile_workspace,
+    save_profile,
+)
 
+SKILL_NAME = "flash-idf"
 @dataclass
 class FlashResult:
     status: str
@@ -259,6 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--baud", type=int, default=460800, help="烧录波特率（默认 460800）")
     parser.add_argument("--erase-flash", action="store_true", help="擦除整片 Flash")
     parser.add_argument("--debug", action="store_true", help="检测 JTAG 调试配置")
+    add_profile_args(parser)
     parser.add_argument("-v", "--verbose", action="store_true", help="详细输出")
     return parser
 
@@ -266,6 +276,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    profile_workspace = resolve_profile_workspace(args, __file__)
+    handle_profile_actions(args, profile_workspace, SKILL_NAME)
+    resume_profile(args, profile_workspace, SKILL_NAME, {"project": "project", "port": "port", "baud": "baud", "debug": "debug"})
 
     if args.detect:
         idf_env = get_idf_env()
@@ -314,6 +328,14 @@ def main() -> int:
             return 1
         result = flash_project(project_dir, port, args.baud, verbose=args.verbose)
         print_flash_result(result)
+        if result.status == "success" and not args.no_save_profile:
+            cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
+                "project": str(project_dir),
+                "port": port,
+                "baud": args.baud,
+                "debug": args.debug,
+            })
+            print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile, "--flash")
         return 0 if result.status == "success" else 1
 
     parser.print_help()

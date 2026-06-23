@@ -39,6 +39,15 @@ python3 skills/build-platformio/scripts/platformio_builder.py --list-devices
 
 ## 常见模式
 
+### 0. 新会话恢复
+
+```bash
+python3 skills/build-platformio/scripts/platformio_builder.py --resume
+```
+
+成功构建后缓存 `project-dir`、`env` 和首选产物；脚本启动即自动复用这些缓存参数（显式参数优先）；无缓存或缓存失效时自动回退，例如 `--detect`、`--list-envs` 或重新扫描。
+
+
 ### 1. 环境探测
 
 ```bash
@@ -105,6 +114,12 @@ python3 skills/build-platformio/scripts/platformio_builder.py \
 | `--upload` | 构建并上传固件到设备 |
 | `--list-devices` | 列出已连接的设备 |
 | `--scan-artifacts` | 仅扫描指定目录中的固件产物 |
+| `--resume` | 从工程根目录 `.em_skill.json` 的缓存 profile 恢复上次成功参数 |
+| `--profile` | 指定缓存 profile 名，默认 `default` |
+| `--workspace` | 指定工程根目录，profile 固定读写该目录下的 `.em_skill.json` |
+| `--show-profile` | 输出当前缓存 profile 并退出 |
+| `--clear-profile` | 删除当前缓存 profile 并退出 |
+| `--no-save-profile` | 成功后不更新缓存 profile |
 | `-v`, `--verbose` | 输出详细构建日志 |
 | `-j`, `--jobs` | 并行构建任务数 |
 

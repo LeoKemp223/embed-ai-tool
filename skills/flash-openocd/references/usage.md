@@ -36,6 +36,15 @@ python3 skills/flash-openocd/scripts/openocd_flasher.py \
 
 ## 常见模式
 
+### 0. 新会话恢复
+
+```bash
+python3 skills/flash-openocd/scripts/openocd_flasher.py --resume
+```
+
+成功烧录后缓存 artifact、interface、target/config、BIN 基地址和自定义命令；脚本启动即自动复用这些缓存参数（显式参数优先）；无缓存或缓存失效时自动回退，例如 探测探针或扫描配置。
+
+
 ### 1. 环境与探针探测
 
 ```bash
@@ -109,6 +118,12 @@ python3 skills/flash-openocd/scripts/openocd_flasher.py \
 | `--no-detect` | 禁止自动探测调试接口 |
 | `--scan-configs` | 扫描指定目录中的 OpenOCD 配置线索 |
 | `--openocd-command` | 自定义 OpenOCD 烧录命令（覆盖自动生成） |
+| `--resume` | 从工程根目录 `.em_skill.json` 的缓存 profile 恢复上次成功参数 |
+| `--profile` | 指定缓存 profile 名，默认 `default` |
+| `--workspace` | 指定工程根目录，profile 固定读写该目录下的 `.em_skill.json` |
+| `--show-profile` | 输出当前缓存 profile 并退出 |
+| `--clear-profile` | 删除当前缓存 profile 并退出 |
+| `--no-save-profile` | 成功后不更新缓存 profile |
 | `-v`, `--verbose` | 输出详细日志 |
 
 ## SWD 接线参考

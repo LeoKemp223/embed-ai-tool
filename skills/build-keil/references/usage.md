@@ -36,6 +36,15 @@ python skills/build-keil/scripts/keil_builder.py --detect --project path/to/app.
 
 ## 常见模式
 
+### 0. 新会话恢复
+
+```bash
+python3 skills/build-keil/scripts/keil_builder.py --resume
+```
+
+成功构建后缓存工程文件、target、UV4 路径和首选产物；脚本启动即自动复用这些缓存参数（显式参数优先）；无缓存或缓存失效时自动回退，例如 `--detect` 或 `--scan`。
+
+
 ### 1. 环境探测
 
 ```bash
@@ -106,6 +115,12 @@ python skills/build-keil/scripts/keil_builder.py \
 | `--scan-artifacts` | 仅扫描指定目录中的固件产物 |
 | `--uv4` | 显式指定 UV4.exe 路径 |
 | `--log` | 编译日志输出路径 |
+| `--resume` | 从工程根目录 `.em_skill.json` 的缓存 profile 恢复上次成功参数 |
+| `--profile` | 指定缓存 profile 名，默认 `default` |
+| `--workspace` | 指定工程根目录，profile 固定读写该目录下的 `.em_skill.json` |
+| `--show-profile` | 输出当前缓存 profile 并退出 |
+| `--clear-profile` | 删除当前缓存 profile 并退出 |
+| `--no-save-profile` | 成功后不更新缓存 profile |
 | `-v`, `--verbose` | 输出详细编译日志 |
 
 ## 返回码

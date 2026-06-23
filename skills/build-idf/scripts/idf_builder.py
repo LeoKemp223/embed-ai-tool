@@ -40,8 +40,17 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
         break
 from tool_config import get_tool_path, set_tool_path
 from idf_env import get_idf_env
+from profile_store import (
+    add_profile_args,
+    handle_profile_actions,
+    print_resume_hint,
+    resume_profile,
+    resolve_profile_workspace,
+    save_profile,
+)
 
 KNOWN_TARGETS = ["esp32", "esp32s2", "esp32s3", "esp32c2", "esp32c3", "esp32c5", "esp32c6", "esp32c61", "esp32h2", "esp32p4"]
+SKILL_NAME = "build-idf"
 
 @dataclass
 class Artifact:
@@ -120,6 +129,19 @@ def set_target(project_dir: Path, target: str) -> tuple[bool, list[str]]:
 
     print(f"✅ 目标芯片已设置为 {target}")
     return True, []
+
+
+def detect_target(project_dir: Path) -> str | None:
+    sdkconfig = project_dir / "sdkconfig"
+    if not sdkconfig.is_file():
+        return None
+    try:
+        for line in sdkconfig.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("CONFIG_IDF_TARGET="):
+                return line.split("=", 1)[1].strip().strip('"')
+    except OSError:
+        return None
+    return None
 
 
 def build_project(project_dir: Path, verbose: bool = False) -> BuildResult:
@@ -255,6 +277,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--set-target", help="设置目标芯片")
     parser.add_argument("--clean", action="store_true", help="执行 fullclean")
     parser.add_argument("--scan-artifacts", help="仅扫描指定目录中的构建产物")
+    add_profile_args(parser)
     parser.add_argument("-v", "--verbose", action="store_true", help="详细输出")
     return parser
 
@@ -262,6 +285,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    profile_workspace = resolve_profile_workspace(args, __file__)
+    handle_profile_actions(args, profile_workspace, SKILL_NAME)
+    resume_profile(args, profile_workspace, SKILL_NAME, {"project": "project", "set_target": "idf_target"})
 
     if args.detect:
         env = detect_environment()
@@ -312,6 +339,15 @@ def main() -> int:
         project_dir = Path(args.project).resolve()
         result = build_project(project_dir, verbose=args.verbose)
         print_build_report(result)
+        if result.status == "success" and result.primary_artifact and not args.no_save_profile:
+            cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
+                "project": str(project_dir),
+                "idf_target": detect_target(project_dir),
+                "build_dir": result.build_dir,
+                "artifact_path": str(result.primary_artifact.path.resolve()),
+                "artifact_kind": result.primary_artifact.kind,
+            })
+            print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile, "--build")
         return 0 if result.status == "success" else 1
 
     parser.print_help()

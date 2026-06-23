@@ -36,6 +36,15 @@ python3 skills/flash-idf/scripts/idf_flasher.py --debug --project /path/to/proje
 
 ## 常见模式
 
+### 0. 新会话恢复
+
+```bash
+python3 skills/flash-idf/scripts/idf_flasher.py --flash --resume
+```
+
+成功烧录后缓存 project、port 和 baud；脚本启动即自动复用这些缓存参数（显式参数优先）；无缓存或缓存失效时自动回退，例如 `--detect` 选择串口。
+
+
 ### 1. 环境与串口探测
 
 ```bash
@@ -75,6 +84,12 @@ python3 skills/flash-idf/scripts/idf_flasher.py --flash --project /repo/fw --por
 | `--baud` | 烧录波特率（默认 460800） |
 | `--erase-flash` | 擦除整片 Flash |
 | `--debug` | 检测 JTAG 调试配置并启动 OpenOCD |
+| `--resume` | 从工程根目录 `.em_skill.json` 的缓存 profile 恢复上次成功参数 |
+| `--profile` | 指定缓存 profile 名，默认 `default` |
+| `--workspace` | 指定工程根目录，profile 固定读写该目录下的 `.em_skill.json` |
+| `--show-profile` | 输出当前缓存 profile 并退出 |
+| `--clear-profile` | 删除当前缓存 profile 并退出 |
+| `--no-save-profile` | 成功后不更新缓存 profile |
 | `-v`, `--verbose` | 详细输出 |
 
 ## 串口设备参考

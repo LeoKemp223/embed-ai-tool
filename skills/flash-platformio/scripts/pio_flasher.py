@@ -45,8 +45,17 @@ from platformio_builder import (
     parse_platformio_ini, PIOEnvironment,
     scan_artifacts, resolve_build_dir, run_pio_device_list,
 )
+from profile_store import (
+    add_profile_args,
+    handle_profile_actions,
+    print_resume_hint,
+    resume_profile,
+    resolve_profile_workspace,
+    save_profile,
+)
 
 
+SKILL_NAME = "flash-platformio"
 @dataclass
 class FlashResult:
     status: str  # success, failure, blocked
@@ -180,6 +189,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--upload-port", help="上传端口（如 COM3、/dev/ttyUSB0）")
     parser.add_argument("--list-devices", action="store_true", help="列出已连接设备")
     parser.add_argument("--save-config", action="store_true", help="保存工具路径到配置")
+    add_profile_args(parser)
     parser.add_argument("-v", "--verbose", action="store_true", help="详细输出")
     return parser
 
@@ -187,6 +197,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    profile_workspace = resolve_profile_workspace(args, __file__)
+    handle_profile_actions(args, profile_workspace, SKILL_NAME)
+    resume_profile(args, profile_workspace, SKILL_NAME, {"project_dir": "project_dir", "env": "env", "upload_port": "upload_port"})
 
     # 探测模式
     if args.detect:
@@ -272,6 +286,14 @@ def main() -> int:
         evidence=evidence,
     )
     print_flash_report(result)
+    if ok and not args.no_save_profile:
+        cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
+            "project_dir": str(project_dir),
+            "env": env_name,
+            "upload_port": args.upload_port,
+            "artifact_path": artifact_path,
+        })
+        print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile, "--flash")
     return 0 if ok else 1
 
 

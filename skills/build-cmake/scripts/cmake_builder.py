@@ -42,11 +42,20 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
         sys.path.insert(0, str(_candidate))
         break
 from tool_config import get_tool_path, set_tool_path
+from profile_store import (
+    add_profile_args,
+    handle_profile_actions,
+    print_resume_hint,
+    resume_profile,
+    resolve_profile_workspace,
+    save_profile,
+)
 
 
 ARTIFACT_PRIORITY = {"elf": 1, "hex": 2, "bin": 3}
 ARTIFACT_EXTENSIONS = {".elf": "elf", ".hex": "hex", ".bin": "bin", ".axf": "elf"}
 GENERATOR_PRIORITY = ["Ninja", "Unix Makefiles", "MinGW Makefiles", "NMake Makefiles"]
+SKILL_NAME = "build-cmake"
 
 @dataclass
 class ToolInfo:
@@ -470,6 +479,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scan-artifacts", help="仅扫描指定目录中的产物")
     parser.add_argument("--extra-args", action="append", default=[], help="传递给 cmake 的额外参数")
     parser.add_argument("--save-config", action="store_true", help="探测成功后保存工具路径到配置")
+    add_profile_args(parser)
     parser.add_argument("-v", "--verbose", action="store_true", help="详细输出")
     parser.add_argument("-j", "--jobs", type=int, help="并行构建任务数")
     return parser
@@ -478,6 +488,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    profile_workspace = resolve_profile_workspace(args, __file__)
+    handle_profile_actions(args, profile_workspace, SKILL_NAME)
+    resume_profile(args, profile_workspace, SKILL_NAME, {
+        "source": "source",
+        "build_dir": "build_dir",
+        "preset": "preset",
+        "generator": "generator",
+        "build_type": "build_type",
+        "toolchain": "toolchain",
+        "target": "target",
+    })
 
     # 环境探测模式
     if args.detect:
@@ -631,6 +653,23 @@ def main() -> int:
         evidence=all_evidence,
     )
     print_build_report(result)
+    if not args.no_save_profile:
+        cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
+            "source": str(source_dir),
+            "build_dir": str(build_dir),
+            "preset": args.preset,
+            "generator": generator,
+            "build_type": build_type,
+            "toolchain": args.toolchain,
+            "target": args.target,
+            "artifact_path": str(primary.path.resolve()),
+            "artifact_kind": primary.kind,
+            "artifacts": [
+                {"path": str(a.path.resolve()), "kind": a.kind, "size": a.size}
+                for a in artifacts[:20]
+            ],
+        })
+        print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile)
     return 0
 
 

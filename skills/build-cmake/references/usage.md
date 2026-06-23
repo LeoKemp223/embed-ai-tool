@@ -11,10 +11,14 @@
 - 执行 cmake configure + build 全流程
 - 在构建目录中搜索 ELF、HEX、BIN 产物并按优先级排序
 - 输出结构化的构建结果和分析报告
+- 成功构建后把可复用参数写入工程根目录 `.em_skill.json`，新对话可用 `--resume` 快速复用
 
 ## 基础用法
 
 ```bash
+# 新会话优先尝试复用上次成功构建
+python3 skills/build-cmake/scripts/cmake_builder.py --resume
+
 # 探测构建环境
 python3 skills/build-cmake/scripts/cmake_builder.py --detect
 
@@ -33,7 +37,32 @@ python3 skills/build-cmake/scripts/cmake_builder.py \
 
 ## 常见模式
 
-### 1. 环境探测
+### 1. 缓存自动复用（新会话）
+
+```bash
+# 直接运行目标动作即可，缓存命中时参数自动补全
+python3 skills/build-cmake/scripts/cmake_builder.py
+# 如需断言缓存必须存在（无缓存则非零退出）：
+python3 skills/build-cmake/scripts/cmake_builder.py --resume
+```
+
+脚本启动即自动从工程根目录 `.em_skill.json` 读取 `skill_profiles.build-cmake.default`，复用上次成功构建的源码目录、构建目录、预设、生成器、构建类型、工具链和目标名（显式参数优先，无需先手动传 `--resume`）。无缓存时脚本自动回退到环境探测或工程扫描；`--resume` 仅用于断言缓存必须存在，无缓存则非零退出。
+
+查看或清理缓存：
+
+```bash
+python3 skills/build-cmake/scripts/cmake_builder.py --show-profile
+python3 skills/build-cmake/scripts/cmake_builder.py --clear-profile
+```
+
+需要区分多个固件目标时使用命名 profile：
+
+```bash
+python3 skills/build-cmake/scripts/cmake_builder.py --source /repo/fw --preset debug --profile bootloader
+python3 skills/build-cmake/scripts/cmake_builder.py --resume --profile bootloader
+```
+
+### 2. 环境探测
 
 ```bash
 python3 skills/build-cmake/scripts/cmake_builder.py --detect
@@ -41,7 +70,7 @@ python3 skills/build-cmake/scripts/cmake_builder.py --detect
 
 输出 cmake 版本、可用生成器、工具链编译器等信息，适合在构建前确认环境就绪。
 
-### 2. 使用预设构建
+### 3. 使用预设构建
 
 ```bash
 python3 skills/build-cmake/scripts/cmake_builder.py \
@@ -51,7 +80,7 @@ python3 skills/build-cmake/scripts/cmake_builder.py \
 
 自动读取 CMakePresets.json，使用指定预设完成配置和构建。
 
-### 3. 手动配置构建
+### 4. 手动配置构建
 
 ```bash
 python3 skills/build-cmake/scripts/cmake_builder.py \
@@ -62,7 +91,7 @@ python3 skills/build-cmake/scripts/cmake_builder.py \
   --toolchain /repo/fw/cmake/arm-none-eabi.cmake
 ```
 
-### 4. 指定构建目标
+### 5. 指定构建目标
 
 ```bash
 python3 skills/build-cmake/scripts/cmake_builder.py \
@@ -71,7 +100,7 @@ python3 skills/build-cmake/scripts/cmake_builder.py \
   --target app
 ```
 
-### 5. 仅搜索已有产物
+### 6. 仅搜索已有产物
 
 ```bash
 python3 skills/build-cmake/scripts/cmake_builder.py \
@@ -80,7 +109,7 @@ python3 skills/build-cmake/scripts/cmake_builder.py \
 
 不执行构建，仅在指定目录中搜索 ELF/HEX/BIN 产物。
 
-### 6. 清理后重新构建
+### 7. 清理后重新构建
 
 ```bash
 python3 skills/build-cmake/scripts/cmake_builder.py \
@@ -105,6 +134,12 @@ python3 skills/build-cmake/scripts/cmake_builder.py \
 | `--clean` | 构建前清理构建目录 |
 | `--scan-artifacts` | 仅扫描指定目录中的固件产物 |
 | `--extra-args` | 传递给 cmake configure 的额外参数，可重复 |
+| `--resume` | 从工程根目录 `.em_skill.json` 的缓存 profile 恢复上次成功构建参数 |
+| `--profile` | 指定缓存 profile 名，默认 `default` |
+| `--workspace` | 指定工程根目录，profile 固定读写该目录下的 `.em_skill.json` |
+| `--show-profile` | 输出当前缓存 profile |
+| `--clear-profile` | 删除当前缓存 profile |
+| `--no-save-profile` | 成功构建后不更新缓存 profile |
 | `-v`, `--verbose` | 输出详细构建日志 |
 | `-j`, `--jobs` | 并行构建任务数 |
 
@@ -117,8 +152,9 @@ python3 skills/build-cmake/scripts/cmake_builder.py \
 
 在 `build-cmake` skill 中，推荐工作流是：
 
-1. 先根据用户输入或 `Project Profile` 决定源码目录、构建类型和预设
-2. 若不确定环境是否就绪，先用 `--detect` 确认
-3. 选择合适的构建模式（预设 vs 手动配置）
-4. 将脚本输出的产物路径和构建信息整理成简洁摘要
-5. 用产物路径更新 `Project Profile`，交给 `flash-openocd` 或 `debug-gdb-openocd`
+1. 直接运行目标动作即可——脚本启动时自动复用工程根目录 `.em_skill.json` 中上次成功构建的 profile（显式参数优先）；仅当需要断言缓存必须存在时才加 `--resume`
+2. 若无缓存或用户要求重新配置，根据用户输入或 `Project Profile` 决定源码目录、构建类型和预设
+3. 若不确定环境是否就绪，先用 `--detect` 确认
+4. 选择合适的构建模式（预设 vs 手动配置）
+5. 将脚本输出的产物路径和构建信息整理成简洁摘要
+6. 用产物路径更新 `Project Profile`，交给 `flash-openocd` 或 `debug-gdb-openocd`

@@ -42,6 +42,14 @@ for _candidate in [_SKILLS_DIR / "shared", _SKILLS_DIR.parent / "shared"]:
         break
 try:
     from tool_config import get_tool_path, set_tool_path, find_sdk_bundled_openocd_scripts
+    from profile_store import (
+        add_profile_args,
+        handle_profile_actions,
+        print_resume_hint,
+        resume_profile,
+        resolve_profile_workspace,
+        save_profile,
+    )
 except ImportError:
     def get_tool_path(name):
         return None
@@ -49,9 +57,22 @@ except ImportError:
         return None
     def find_sdk_bundled_openocd_scripts():
         return None
+    def add_profile_args(parser):
+        return None
+    def handle_profile_actions(args, workspace, skill_name):
+        return False
+    def print_resume_hint(script_path, cfg_path, skill_name, name=None, action_args=None):
+        return None
+    def resume_profile(args, workspace, skill_name, fields):
+        return None
+    def resolve_profile_workspace(args, script_path=None, fallback=None):
+        return Path(fallback).resolve() if fallback else Path.cwd().resolve()
+    def save_profile(workspace, skill_name, name, data):
+        return workspace
 
 
 ARTIFACT_EXTENSIONS = {".elf": "elf", ".hex": "hex", ".bin": "bin", ".axf": "elf"}
+SKILL_NAME = "flash-openocd"
 ARTIFACT_PRIORITY = {"elf": 1, "hex": 2, "bin": 3}
 INTERFACE_CONFIGS = {
     "stlink": "interface/stlink.cfg",
@@ -407,6 +428,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--scan-configs", help="扫描指定目录中的 OpenOCD 配置线索")
     parser.add_argument("--openocd-command", help="自定义 OpenOCD 烧录命令")
     parser.add_argument("--save-config", action="store_true", help="探测成功后保存工具路径到配置")
+    add_profile_args(parser)
     parser.add_argument("-v", "--verbose", action="store_true", help="详细输出")
     return parser
 
@@ -414,6 +436,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
+
+    profile_workspace = resolve_profile_workspace(args, __file__)
+    handle_profile_actions(args, profile_workspace, SKILL_NAME)
+    resume_profile(args, profile_workspace, SKILL_NAME, {"artifact": "artifact", "interface": "interface", "target": "target", "config": "config", "base_address": "base_address", "openocd_command": "openocd_command"})
 
     # 探测模式
     if args.detect:
@@ -523,6 +549,17 @@ def main() -> int:
         evidence=evidence,
     )
     print_flash_report(result)
+    if ok and not args.no_save_profile:
+        cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
+            "artifact": artifact_path,
+            "artifact_kind": kind,
+            "interface": interface,
+            "target": args.target,
+            "config": args.config,
+            "base_address": args.base_address,
+            "openocd_command": args.openocd_command,
+        })
+        print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile)
     return 0 if ok else 1
 
 

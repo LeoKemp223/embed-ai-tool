@@ -18,6 +18,7 @@ description: 当需要通过 Keil MDK 内置调试器烧录固件到目标板时
 
 ## 自动探测
 
+- 脚本启动即自动复用工程根目录 `.em_skill.json` 中上次成功的 profile 作为默认参数（显式参数优先，无需先手动传 `--resume`）；`--resume` 仅用于断言缓存必须存在，无缓存则非零退出。无缓存或用户明确要求重新探测时，脚本自动回退到正常扫描。
 - 复用 `build-keil` 的 UV4.exe 探测逻辑（配置文件 → 环境变量 → 常见路径 → PATH）。
 - 解析工程 XML 中的 `<DriverSelection>` 识别调试器类型（ST-Link、J-Link、CMSIS-DAP、ULINK）。
 - 若未指定目标，默认使用工程中的第一个 Target。
