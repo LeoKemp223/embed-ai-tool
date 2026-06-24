@@ -57,6 +57,7 @@ from profile_store import (
     resume_profile,
     resolve_profile_workspace,
     save_profile,
+    update_project_profile,
 )
 
 SKILL_NAME = "flash-keil"
@@ -292,7 +293,7 @@ def main() -> int:
             return 1
 
     if args.detect:
-        env = detect_environment(args.uv4)
+        env = detect_environment(args.uv4, profile_workspace)
         debugger = None
         if args.project:
             project_path = Path(args.project).resolve()
@@ -300,7 +301,7 @@ def main() -> int:
                 debugger = parse_debugger_config(project_path, args.target)
         print_detect_report(env, debugger)
         if args.save_config and env["uv4"]["available"]:
-            cfg_path = set_tool_path("uv4", env["uv4"]["path"])
+            cfg_path = set_tool_path("uv4", env["uv4"]["path"], workspace=profile_workspace)
             print(f"  💾 已保存到 {cfg_path}")
         if not env["uv4"]["available"]:
             return 1
@@ -342,7 +343,7 @@ def main() -> int:
     if debugger:
         print(f"🔌 调试器: {debugger}")
 
-    uv4_path = find_uv4(args.uv4)
+    uv4_path = find_uv4(args.uv4, profile_workspace)
     if not uv4_path:
         if not is_windows():
             print("❌ Keil MDK 烧录仅在 Windows 上支持。")
@@ -360,11 +361,25 @@ def main() -> int:
 
     print_flash_report(flash_result)
     if flash_result.status == "success" and not args.no_save_profile:
+        set_tool_path("uv4", uv4_path, workspace=profile_workspace)
+        probe = debugger.lower().replace("-", "").replace(" ", "-") if debugger else None
+        update_project_profile(profile_workspace, {
+            "build_system": "keil",
+            "project_file": str(project_path),
+            "target": selected.name,
+            "target_mcu": selected.device,
+            "probe": probe,
+            "debugger": debugger,
+            "uv4_path": uv4_path,
+            "artifact_path": flash_result.artifact_path,
+        })
         cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
             "project": str(project_path),
             "target": selected.name,
             "uv4": uv4_path,
+            "uv4_path": uv4_path,
             "artifact_path": flash_result.artifact_path,
+            "device": selected.device,
             "debugger": debugger,
         })
         print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile, "--flash")

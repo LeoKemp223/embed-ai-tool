@@ -42,25 +42,22 @@ class IdfEnv:
 # ---------------------------------------------------------------------------
 # 模块级缓存
 # ---------------------------------------------------------------------------
-_cached_env: IdfEnv | None = None
-_cached_resolved: bool = False
+_cached_envs: dict[str, IdfEnv | None] = {}
 
 
-def get_idf_env() -> IdfEnv | None:
+def get_idf_env(workspace: str | Path | None = None) -> IdfEnv | None:
     """探测并返回可用的 IDF 环境，同一进程内缓存结果。"""
-    global _cached_env, _cached_resolved
-    if _cached_resolved:
-        return _cached_env
-    _cached_env = _resolve_idf_env()
-    _cached_resolved = True
-    return _cached_env
+    cache_key = str(Path(workspace).resolve()) if workspace else ""
+    if cache_key not in _cached_envs:
+        _cached_envs[cache_key] = _resolve_idf_env(workspace)
+    return _cached_envs[cache_key]
 
 
 # ---------------------------------------------------------------------------
 # 内部实现
 # ---------------------------------------------------------------------------
 
-def _resolve_idf_env() -> IdfEnv | None:
+def _resolve_idf_env(workspace: str | Path | None = None) -> IdfEnv | None:
     """按优先级依次尝试各种方式获取 IDF 环境。"""
 
     # 1. 已激活：IDF_PATH 已设置且 idf.py 可达
@@ -69,12 +66,12 @@ def _resolve_idf_env() -> IdfEnv | None:
         return result
 
     # 2. 通过激活脚本获取环境
-    result = _try_activate_script()
+    result = _try_activate_script(workspace)
     if result:
         return result
 
     # 3. idf.py 在 PATH 中（旧版安装或用户手动配置）
-    result = _try_path_lookup()
+    result = _try_path_lookup(workspace)
     if result:
         return result
 
@@ -97,11 +94,11 @@ def _try_already_active() -> IdfEnv | None:
     return IdfEnv(idf_py_cmd=cmd, env=env, version=version, source="already-active")
 
 
-def _try_activate_script() -> IdfEnv | None:
+def _try_activate_script(workspace: str | Path | None = None) -> IdfEnv | None:
     """查找并 source 激活脚本，捕获激活后的环境变量。"""
 
     # 优先使用用户配置的路径
-    configured = get_tool_path("idf-activate")
+    configured = get_tool_path("idf-activate", workspace)
     if configured:
         script = Path(configured).expanduser()
         if script.exists():
@@ -145,14 +142,19 @@ def _try_activate_script() -> IdfEnv | None:
     return None
 
 
-def _try_path_lookup() -> IdfEnv | None:
+def _try_path_lookup(workspace: str | Path | None = None) -> IdfEnv | None:
     """尝试从 PATH 或 tool_config 配置中找到 idf.py。"""
     env = dict(os.environ)
 
     # tool_config 配置
-    configured = get_tool_path("idf-py")
-    if configured and shutil.which(configured):
+    configured = get_tool_path("idf-py", workspace)
+    if configured:
         cmd = configured.split()
+        if len(cmd) == 1:
+            resolved = shutil.which(cmd[0]) or cmd[0]
+            if not Path(resolved).exists() and not shutil.which(cmd[0]):
+                return None
+            cmd = [resolved]
         version = _probe_version(cmd, env)
         return IdfEnv(idf_py_cmd=cmd, env=env, version=version, source="path")
 

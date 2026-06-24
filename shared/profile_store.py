@@ -19,6 +19,7 @@ from typing import Any
 from tool_config import load_config, save_config, workspace_config_path
 
 PROFILE_SECTION = "skill_profiles"
+PROJECT_PROFILE_SECTION = "project_profile"
 DEFAULT_PROFILE = "default"
 
 
@@ -89,6 +90,29 @@ def save_profile(
     payload = dict(data)
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
     skill_profiles[profile_name(name)] = payload
+    save_config(cfg_path, cfg)
+    return cfg_path
+
+
+def update_project_profile(workspace: str | Path, data: dict[str, Any]) -> Path:
+    """Merge stable cross-skill fields into ``.em_skill.json.project_profile``.
+
+    ``skill_profiles`` remains the per-script resume cache. This helper keeps a
+    single project-wide view for tools, probes, target chips, artifacts, and
+    serial/debug settings that other skills can reuse without knowing which
+    flash skill produced them.
+    """
+    cfg_path = workspace_config_path(workspace)
+    cfg = load_config(cfg_path)
+    profile = cfg.setdefault(PROJECT_PROFILE_SECTION, {})
+    for key, value in data.items():
+        if value is None:
+            continue
+        if value == [] or value == {}:
+            continue
+        profile[key] = value
+    profile["workspace_root"] = str(Path(workspace).resolve())
+    profile["updated_at"] = datetime.now(timezone.utc).isoformat()
     save_config(cfg_path, cfg)
     return cfg_path
 

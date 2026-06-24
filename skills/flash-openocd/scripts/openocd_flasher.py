@@ -49,11 +49,12 @@ try:
         resume_profile,
         resolve_profile_workspace,
         save_profile,
+        update_project_profile,
     )
 except ImportError:
-    def get_tool_path(name):
+    def get_tool_path(name, workspace=None):
         return None
-    def set_tool_path(name, path):
+    def set_tool_path(name, path, workspace=None):
         return None
     def find_sdk_bundled_openocd_scripts():
         return None
@@ -68,6 +69,8 @@ except ImportError:
     def resolve_profile_workspace(args, script_path=None, fallback=None):
         return Path(fallback).resolve() if fallback else Path.cwd().resolve()
     def save_profile(workspace, skill_name, name, data):
+        return workspace
+    def update_project_profile(workspace, data):
         return workspace
 
 
@@ -101,9 +104,18 @@ class FlashResult:
 # OpenOCD 探测
 # ---------------------------------------------------------------------------
 
-def check_openocd() -> tuple[bool, str | None]:
+def find_openocd(workspace: str | Path | None = None) -> str | None:
+    configured = get_tool_path("openocd", workspace)
+    if configured:
+        configured_path = shutil.which(configured) or configured
+        if Path(configured_path).exists():
+            return configured_path
+    return shutil.which("openocd")
+
+
+def check_openocd(workspace: str | Path | None = None) -> tuple[bool, str | None]:
     # 配置文件
-    configured = get_tool_path("openocd")
+    configured = get_tool_path("openocd", workspace)
     if configured:
         configured_path = shutil.which(configured) or configured
         if Path(configured_path).exists():
@@ -138,8 +150,9 @@ def canonical_interface(name: str | None) -> str | None:
     return lowered
 
 
-def detect_probes() -> list[str]:
-    if not shutil.which("openocd"):
+def detect_probes(openocd_path: str | None = None) -> list[str]:
+    openocd = openocd_path or find_openocd()
+    if not openocd:
         return []
 
     detected: list[str] = []
@@ -147,7 +160,7 @@ def detect_probes() -> list[str]:
         cfg = INTERFACE_CONFIGS[interface]
         try:
             result = subprocess.run(
-                ["openocd", "-f", cfg, "-c", "init", "-c", "exit"],
+                [openocd, "-f", cfg, "-c", "init", "-c", "exit"],
                 capture_output=True, text=True, timeout=4,
             )
         except Exception:
@@ -167,13 +180,13 @@ def detect_probes() -> list[str]:
     return detected
 
 
-def choose_interface(explicit: str | None, no_detect: bool) -> str | None:
+def choose_interface(explicit: str | None, no_detect: bool, openocd_path: str | None = None) -> str | None:
     canonical = canonical_interface(explicit)
     if canonical:
         return canonical
     if no_detect:
         return None
-    available = detect_probes()
+    available = detect_probes(openocd_path)
     if not available:
         return None
     chosen = available[0]
@@ -241,6 +254,7 @@ def scan_openocd_configs(workspace: Path) -> list[dict[str, str]]:
 # ---------------------------------------------------------------------------
 
 def build_flash_command(
+    openocd_path: str,
     interface: str | None,
     configs: list[str],
     targets: list[str],
@@ -251,7 +265,7 @@ def build_flash_command(
     reset: bool,
     custom_command: str | None,
 ) -> list[str] | None:
-    cmd: list[str] = ["openocd"]
+    cmd: list[str] = [openocd_path]
 
     # 额外 OpenOCD scripts（SDK 自带的芯片特定目标配置）
     extra_scripts = find_sdk_bundled_openocd_scripts()
@@ -443,13 +457,14 @@ def main() -> int:
 
     # 探测模式
     if args.detect:
-        available, version = check_openocd()
-        probes = detect_probes() if available else []
+        openocd_path = find_openocd(profile_workspace)
+        available, version = check_openocd(profile_workspace)
+        probes = detect_probes(openocd_path) if available else []
         print_detect_report(available, version, probes)
         if args.save_config and available:
-            ocd_path = shutil.which("openocd")
+            ocd_path = openocd_path or shutil.which("openocd")
             if ocd_path:
-                cfg_path = set_tool_path("openocd", ocd_path)
+                cfg_path = set_tool_path("openocd", ocd_path, workspace=profile_workspace)
                 print(f"  💾 已保存到 {cfg_path}")
         return 0 if available else 1
 
@@ -465,7 +480,8 @@ def main() -> int:
         return 1
 
     # 检查 openocd
-    available, _ = check_openocd()
+    openocd_path = find_openocd(profile_workspace)
+    available, _ = check_openocd(profile_workspace)
     if not available:
         print("❌ 未找到 openocd，请先安装。")
         return 1
@@ -492,13 +508,14 @@ def main() -> int:
         return 1
 
     # 选择接口
-    interface = choose_interface(args.interface, args.no_detect)
+    interface = choose_interface(args.interface, args.no_detect, openocd_path)
 
     verify = not args.no_verify
     reset = not args.no_reset
 
     # 组装命令
     cmd = build_flash_command(
+        openocd_path=openocd_path or "openocd",
         interface=interface,
         configs=args.config,
         targets=args.target,
@@ -550,6 +567,17 @@ def main() -> int:
     )
     print_flash_report(result)
     if ok and not args.no_save_profile:
+        if openocd_path:
+            set_tool_path("openocd", openocd_path, workspace=profile_workspace)
+        update_project_profile(profile_workspace, {
+            "artifact_path": artifact_path,
+            "artifact_kind": kind,
+            "probe": interface,
+            "openocd_path": openocd_path,
+            "openocd_config": [*args.config, *args.target],
+            "openocd_interface": interface,
+            "base_address": args.base_address,
+        })
         cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
             "artifact": artifact_path,
             "artifact_kind": kind,
@@ -558,6 +586,7 @@ def main() -> int:
             "config": args.config,
             "base_address": args.base_address,
             "openocd_command": args.openocd_command,
+            "openocd_path": openocd_path,
         })
         print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile)
     return 0 if ok else 1

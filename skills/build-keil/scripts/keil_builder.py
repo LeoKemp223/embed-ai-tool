@@ -119,7 +119,7 @@ def is_windows() -> bool:
     return platform.system().lower() == "windows"
 
 
-def find_uv4(explicit_path: str | None = None) -> str | None:
+def find_uv4(explicit_path: str | None = None, workspace: str | Path | None = None) -> str | None:
     if explicit_path:
         p = Path(explicit_path)
         if p.exists():
@@ -127,7 +127,7 @@ def find_uv4(explicit_path: str | None = None) -> str | None:
         return None
 
     # 配置文件
-    configured = get_tool_path("uv4")
+    configured = get_tool_path("uv4", workspace)
     if configured and Path(configured).exists():
         return configured
 
@@ -153,8 +153,8 @@ def find_uv4(explicit_path: str | None = None) -> str | None:
     return None
 
 
-def detect_environment(explicit_uv4: str | None = None) -> dict[str, Any]:
-    uv4_path = find_uv4(explicit_uv4)
+def detect_environment(explicit_uv4: str | None = None, workspace: str | Path | None = None) -> dict[str, Any]:
+    uv4_path = find_uv4(explicit_uv4, workspace)
     env: dict[str, Any] = {
         "platform": platform.system(),
         "is_windows": is_windows(),

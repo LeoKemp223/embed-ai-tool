@@ -45,6 +45,7 @@ from platformio_builder import (
     parse_platformio_ini, PIOEnvironment,
     scan_artifacts, resolve_build_dir, run_pio_device_list,
 )
+from tool_config import set_tool_path
 from profile_store import (
     add_profile_args,
     handle_profile_actions,
@@ -52,6 +53,7 @@ from profile_store import (
     resume_profile,
     resolve_profile_workspace,
     save_profile,
+    update_project_profile,
 )
 
 
@@ -204,7 +206,7 @@ def main() -> int:
 
     # 探测模式
     if args.detect:
-        env = detect_environment()
+        env = detect_environment(profile_workspace)
         pio_path = env["pio"]["path"]
         devices = run_pio_device_list(pio_path) if pio_path else None
         print_detect_report(env, devices)
@@ -212,7 +214,7 @@ def main() -> int:
 
     # 列出设备
     if args.list_devices:
-        pio_path = find_pio()
+        pio_path = find_pio(profile_workspace)
         if not pio_path:
             print("❌ 未找到 pio，请先安装 PlatformIO。")
             return 1
@@ -237,7 +239,7 @@ def main() -> int:
         print(f"❌ 未找到 platformio.ini: {project_dir}")
         return 1
 
-    pio_path = find_pio()
+    pio_path = find_pio(profile_workspace)
     if not pio_path:
         print("❌ 未找到 pio，请先安装 PlatformIO。")
         return 1
@@ -287,9 +289,29 @@ def main() -> int:
     )
     print_flash_report(result)
     if ok and not args.no_save_profile:
+        set_tool_path("pio", pio_path, workspace=profile_workspace)
+        upload_protocol = env_info.upload_protocol or None
+        probe = upload_protocol if upload_protocol in {"jlink", "stlink", "cmsis-dap", "daplink"} else None
+        update_project_profile(profile_workspace, {
+            "build_system": "platformio",
+            "project_dir": str(project_dir),
+            "target": env_name,
+            "board": env_info.board,
+            "platform": env_info.platform,
+            "probe": probe,
+            "upload_protocol": upload_protocol,
+            "upload_port": args.upload_port,
+            "serial_port": args.upload_port,
+            "artifact_path": artifact_path,
+            "pio_path": pio_path,
+        })
         cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
             "project_dir": str(project_dir),
             "env": env_name,
+            "pio_path": pio_path,
+            "board": env_info.board,
+            "platform": env_info.platform,
+            "upload_protocol": env_info.upload_protocol or None,
             "upload_port": args.upload_port,
             "artifact_path": artifact_path,
         })

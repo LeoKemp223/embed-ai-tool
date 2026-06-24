@@ -49,6 +49,7 @@ from profile_store import (
     resume_profile,
     resolve_profile_workspace,
     save_profile,
+    update_project_profile,
 )
 
 SKILL_NAME = "flash-idf"
@@ -103,9 +104,22 @@ def _has_build_artifacts(project_dir: Path) -> bool:
     return flasher_args.exists()
 
 
+def read_idf_target(project_dir: Path) -> str | None:
+    sdkconfig = project_dir / "sdkconfig"
+    if not sdkconfig.exists():
+        return None
+    try:
+        text = sdkconfig.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    match = re.search(r"^CONFIG_IDF_TARGET=\"?([^\"\n]+)\"?", text, re.MULTILINE)
+    return match.group(1) if match else None
+
+
 def flash_project(project_dir: Path, port: str | None, baud: int = 460800,
+                   workspace: str | Path | None = None,
                    verbose: bool = False) -> FlashResult:
-    idf_env = get_idf_env()
+    idf_env = get_idf_env(workspace)
     if not idf_env:
         return FlashResult(status="failure", summary="idf.py 不可用",
                            failure_category="environment-missing")
@@ -157,8 +171,9 @@ def flash_project(project_dir: Path, port: str | None, baud: int = 460800,
                        port=port, baud=baud, evidence=evidence)
 
 
-def erase_flash(port: str | None, baud: int = 460800) -> FlashResult:
-    idf_env = get_idf_env()
+def erase_flash(port: str | None, baud: int = 460800,
+                workspace: str | Path | None = None) -> FlashResult:
+    idf_env = get_idf_env(workspace)
     if not idf_env:
         return FlashResult(status="failure", summary="idf.py 不可用",
                            failure_category="environment-missing")
@@ -282,7 +297,7 @@ def main() -> int:
     resume_profile(args, profile_workspace, SKILL_NAME, {"project": "project", "port": "port", "baud": "baud", "debug": "debug"})
 
     if args.detect:
-        idf_env = get_idf_env()
+        idf_env = get_idf_env(profile_workspace)
         ports = detect_serial_ports()
         debug_info = None
         if args.project:
@@ -291,7 +306,7 @@ def main() -> int:
         return 0
 
     if args.erase_flash:
-        result = erase_flash(args.port, args.baud)
+        result = erase_flash(args.port, args.baud, profile_workspace)
         print_flash_result(result)
         return 0 if result.status == "success" else 1
 
@@ -326,14 +341,33 @@ def main() -> int:
             else:
                 print("⚠️ 未检测到串口设备，请通过 --port 手动指定")
             return 1
-        result = flash_project(project_dir, port, args.baud, verbose=args.verbose)
+        result = flash_project(project_dir, port, args.baud, profile_workspace, verbose=args.verbose)
         print_flash_result(result)
         if result.status == "success" and not args.no_save_profile:
+            idf_env = get_idf_env(profile_workspace)
+            idf_py_cmd = idf_env.idf_py_cmd if idf_env else []
+            if idf_py_cmd:
+                set_tool_path("idf-py", " ".join(idf_py_cmd), workspace=profile_workspace)
+            idf_target = read_idf_target(project_dir)
+            update_project_profile(profile_workspace, {
+                "build_system": "idf",
+                "project_dir": str(project_dir),
+                "serial_port": port,
+                "baud_rate": args.baud,
+                "idf_target": idf_target,
+                "target_mcu": idf_target,
+                "idf_py_cmd": idf_py_cmd,
+                "idf_py_path": idf_py_cmd[-1] if idf_py_cmd else None,
+                "idf_version": idf_env.version if idf_env else None,
+            })
             cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
                 "project": str(project_dir),
                 "port": port,
                 "baud": args.baud,
                 "debug": args.debug,
+                "idf_py_cmd": idf_py_cmd,
+                "idf_py_path": idf_py_cmd[-1] if idf_py_cmd else None,
+                "idf_version": idf_env.version if idf_env else None,
             })
             print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile, "--flash")
         return 0 if result.status == "success" else 1

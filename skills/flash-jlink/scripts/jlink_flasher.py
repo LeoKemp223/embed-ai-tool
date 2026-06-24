@@ -49,6 +49,7 @@ from profile_store import (
     resume_profile,
     resolve_profile_workspace,
     save_profile,
+    update_project_profile,
 )
 
 
@@ -76,9 +77,9 @@ class FlashResult:
 # JLinkExe 探测
 # ---------------------------------------------------------------------------
 
-def _jlink_exe_candidates() -> list[str]:
+def _jlink_exe_candidates(workspace: str | Path | None = None) -> list[str]:
     candidates = []
-    configured = get_tool_path("jlink")
+    configured = get_tool_path("jlink", workspace)
     if configured:
         candidates.append(configured)
 
@@ -97,8 +98,8 @@ def _jlink_exe_candidates() -> list[str]:
     return candidates
 
 
-def find_jlink_exe() -> str | None:
-    for candidate in _jlink_exe_candidates():
+def find_jlink_exe(workspace: str | Path | None = None) -> str | None:
+    for candidate in _jlink_exe_candidates(workspace):
         path = shutil.which(candidate)
         if path:
             return path
@@ -107,8 +108,8 @@ def find_jlink_exe() -> str | None:
     return None
 
 
-def check_jlink() -> tuple[bool, str | None, str | None]:
-    jlink = find_jlink_exe()
+def check_jlink(workspace: str | Path | None = None) -> tuple[bool, str | None, str | None]:
+    jlink = find_jlink_exe(workspace)
     if not jlink:
         return False, None, None
 
@@ -421,11 +422,11 @@ def main() -> int:
 
     # 探测模式
     if args.detect:
-        available, jlink, version = check_jlink()
+        available, jlink, version = check_jlink(profile_workspace)
         devices = detect_connected_devices(jlink) if available and jlink else []
         print_detect_report(available, jlink, version, devices)
         if args.save_config and available and jlink:
-            cfg_path = set_tool_path("jlink", jlink)
+            cfg_path = set_tool_path("jlink", jlink, workspace=profile_workspace)
             print(f"  💾 已保存到 {cfg_path}")
         return 0 if available else 1
 
@@ -440,7 +441,7 @@ def main() -> int:
         if not args.device:
             print("❌ RTT 模式需要 --device 参数。")
             return 1
-        jlink = find_jlink_exe()
+        jlink = find_jlink_exe(profile_workspace)
         if not jlink:
             print("❌ 未找到 JLinkExe，请先安装 SEGGER J-Link。")
             return 1
@@ -468,7 +469,7 @@ def main() -> int:
         return 1
 
     # 检查 JLinkExe
-    jlink = find_jlink_exe()
+    jlink = find_jlink_exe(profile_workspace)
     if not jlink:
         print("❌ 未找到 JLinkExe，请先安装 SEGGER J-Link。")
         return 1
@@ -537,6 +538,18 @@ def main() -> int:
     )
     print_flash_report(result)
     if ok and not args.no_save_profile:
+        set_tool_path("jlink", jlink, workspace=profile_workspace)
+        update_project_profile(profile_workspace, {
+            "artifact_path": artifact_path,
+            "artifact_kind": kind,
+            "probe": "jlink",
+            "target_mcu": args.device,
+            "jlink_device": args.device,
+            "jlink_interface": args.interface,
+            "jlink_speed": args.speed,
+            "jlink_path": jlink,
+            "base_address": args.base_address,
+        })
         cfg_path = save_profile(profile_workspace, SKILL_NAME, args.profile, {
             "artifact": artifact_path,
             "artifact_kind": kind,
@@ -544,6 +557,7 @@ def main() -> int:
             "interface": args.interface,
             "speed": args.speed,
             "base_address": args.base_address,
+            "jlink_path": jlink,
         })
         print_resume_hint(__file__, cfg_path, SKILL_NAME, args.profile)
     return 0 if ok else 1

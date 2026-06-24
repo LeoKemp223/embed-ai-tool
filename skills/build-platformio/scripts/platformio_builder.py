@@ -93,9 +93,9 @@ class BuildResult:
 # PlatformIO 探测
 # ---------------------------------------------------------------------------
 
-def find_pio() -> str | None:
+def find_pio(workspace: str | Path | None = None) -> str | None:
     # 配置文件
-    configured = get_tool_path("pio")
+    configured = get_tool_path("pio", workspace)
     if configured:
         configured_path = shutil.which(configured) or configured
         if Path(configured_path).exists():
@@ -116,8 +116,8 @@ def get_pio_version(pio_path: str) -> str | None:
         return None
 
 
-def detect_environment() -> dict[str, Any]:
-    pio_path = find_pio()
+def detect_environment(workspace: str | Path | None = None) -> dict[str, Any]:
+    pio_path = find_pio(workspace)
     version = get_pio_version(pio_path) if pio_path else None
     env: dict[str, Any] = {
         "pio": {
