@@ -1,0 +1,4 @@
+interface:
+  display_name: "逻辑分析仪采集"
+  short_description: "通过 Saleae Logic 2 在线采集数字波形并解码 I2C/SPI/UART（支持多协议同时解码）。"
+  default_prompt: "使用 logic-analyzer skill，探测 Logic 2 连通性，用 --analyzer 采集指定通道波形并解码 I2C/SPI/UART，导出数据表。"
