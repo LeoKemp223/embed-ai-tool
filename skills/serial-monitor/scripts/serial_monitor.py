@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -216,12 +217,38 @@ def open_serial(port: str, baudrate: int):
         return None
 
 
+def _read_openocd_path() -> str | None:
+    """从工作区 .em_skill.json 读取已配置的 openocd 路径，否则走 PATH。"""
+    ws = Path.cwd()
+    for _ in range(5):
+        cfg = ws / ".em_skill.json"
+        if cfg.is_file():
+            try:
+                data = json.loads(cfg.read_text(encoding="utf-8"))
+                p = data.get("tools", {}).get("openocd")
+                if p:
+                    return p
+            except Exception:
+                pass
+        ws = ws.parent
+    return None
+
+
+def _find_openocd() -> str | None:
+    """返回 openocd 可执行文件路径，优先用配置文件。"""
+    cfg_path = _read_openocd_path()
+    if cfg_path and Path(cfg_path).is_file():
+        return cfg_path
+    return shutil.which("openocd")
+
+
 def check_openocd() -> bool:
-    return shutil.which("openocd") is not None
+    return _find_openocd() is not None
 
 
 def detect_available_debuggers() -> list[str]:
-    if not check_openocd():
+    openocd = _find_openocd()
+    if not openocd:
         return []
 
     detected: list[str] = []
@@ -230,7 +257,7 @@ def detect_available_debuggers() -> list[str]:
         interface_cfg = INTERFACE_CONFIGS[interface]
         try:
             result = subprocess.run(
-                ["openocd", "-f", interface_cfg, "-c", "init; exit"],
+                [openocd, "-f", interface_cfg, "-c", "init; exit"],
                 capture_output=True,
                 text=True,
                 timeout=3,
@@ -295,7 +322,12 @@ def build_openocd_command(
         print("   请提供 `--openocd-config` 或 `--openocd-target`。")
         return None
 
-    command_line = ["openocd"]
+    openocd = _find_openocd()
+    if not openocd:
+        print("❌ 未找到 OpenOCD，请配置 openocd 路径或在 PATH 中安装。")
+        return None
+
+    command_line = [openocd]
     for cfg in configs:
         command_line.extend(["-f", cfg])
     command_line.extend(["-c", command])
