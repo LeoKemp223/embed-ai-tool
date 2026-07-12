@@ -50,8 +50,8 @@ SCRIPT_MAP = {
     },
     "platformio": {
         "build": "build-platformio/scripts/platformio_builder.py",
-        "flash": "flash-platformio/scripts/pio_flasher.py",
-        "debug": "debug-platformio/scripts/pio_debugger.py",
+        "flash": "flash-openocd/scripts/openocd_flasher.py",
+        "debug": "debug-gdb-openocd/scripts/gdb_debugger.py",
         "monitor": "serial-monitor/scripts/serial_monitor.py",
     },
 }
@@ -182,18 +182,19 @@ def build_flash_cmd(script: Path, args, artifact: str | None) -> list[str]:
         if args.flash_target:
             cmd += ["--target", args.flash_target]
     elif args.build_system == "platformio":
-        cmd.append("--flash")
-        if args.project:
-            cmd += ["--project-dir", args.project]
-        if args.target:
-            cmd += ["--env", args.target]
+        if artifact:
+            cmd += ["--artifact", artifact]
+        if args.flash_interface:
+            cmd += ["--interface", args.flash_interface]
+        if args.flash_target:
+            cmd += ["--target", args.flash_target]
     if args.verbose:
         cmd.append("-v")
     return cmd
 
 
 def build_monitor_cmd(script: Path, args) -> list[str]:
-    cmd = [sys.executable, str(script), "--listen"]
+    cmd = [sys.executable, str(script), "--duration", "8"]
     if args.port:
         cmd += ["--port", args.port]
     if args.baud:

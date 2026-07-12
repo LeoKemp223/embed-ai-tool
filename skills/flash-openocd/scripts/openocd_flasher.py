@@ -300,17 +300,15 @@ def build_flash_command(
         cmd.extend(["-c", custom_command])
     else:
         artifact_posix = str(artifact).replace("\\", "/")
-        program_parts = [f"program {artifact_posix}"]
+        tcl = f"init; program {artifact_posix}"
         if artifact_kind == "bin" and base_address:
-            program_parts.append(base_address)
+            tcl += f" {base_address}"
         if verify:
-            program_parts.append("verify")
+            tcl += " verify"
         if reset:
-            program_parts.append("reset")
-        program_parts.append("exit")
-        cmd.extend(["-c", "init"])
-        for part in program_parts:
-            cmd.extend(["-c", part])
+            tcl += " reset"
+        tcl += "; exit"
+        cmd.extend(["-c", tcl])
 
     return cmd
 
