@@ -23,7 +23,9 @@ description: 当需要进行 FreeRTOS/RT-Thread/Zephyr 的线程感知调试，�
 
 - 通过 ELF 符号表自动判断 RTOS 类型：`vTaskStartScheduler` → FreeRTOS，`rt_thread_init` → RT-Thread，`k_thread_create` → Zephyr。
 - 不依赖 OpenOCD 的 RTOS awareness 功能，改用 GDB 直接读取 RTOS 内核数据结构。
-- FreeRTOS 提供完整支持（任务列表、栈水位、队列），RT-Thread/Zephyr 提供基本任务列表支持。
+- FreeRTOS 提供完整支持（任务列表、栈水位、队列）。
+- Zephyr 支持任务列表、内核对象状态（msgq/sem/mutex/queue/fifo/lifo）和死锁检测，需固件启用 `CONFIG_THREAD_MONITOR=y`（线程名需 `CONFIG_THREAD_NAME=y`）。对象发现优先使用 `CONFIG_TRACING_OBJECT_TRACKING` 追踪链表，未启用时回退到静态段符号 `_k_*_list_start/_end`（仅覆盖静态定义的对象）。
+- RT-Thread 仅提供基本任务列表支持。
 
 ## 执行步骤
 
@@ -32,8 +34,8 @@ description: 当需要进行 FreeRTOS/RT-Thread/Zephyr 的线程感知调试，�
 3. 若不确定 RTOS 类型，先运行 [scripts/rtos_debugger.py](scripts/rtos_debugger.py) 的 `--detect` 模式。
 4. 使用 `--tasks` 查看任务列表和状态。
 5. 使用 `--stack-check` 检查各任务栈水位。
-6. 使用 `--deadlock` 检查死锁特征。
-7. 使用 `--queues` 查看队列和信号量状态。
+6. 使用 `--deadlock` 检查死锁特征（Zephyr 会检测 mutex 等待环，如 `A -> B -> A`）。
+7. 使用 `--queues` 查看队列和信号量状态（Zephyr 支持 msgq/sem/mutex/queue/fifo/lifo，含持有者与等待者）。
 
 ## 失败分流
 
