@@ -7,14 +7,20 @@
 - 通过 ELF 符号自动检测 RTOS 类型（FreeRTOS、RT-Thread、Zephyr）
 - 通过 GDB batch 模式读取任务列表和状态
 - 检查各任务栈水位
-- 死锁检测
-- 队列/信号量状态查看
+- 死锁检测（FreeRTOS：全任务等待启发式；Zephyr：mutex 等待环检测）
+- 队列/信号量状态查看（FreeRTOS 队列注册表；Zephyr 内核对象追踪）
 
 ## 前置条件
 
 - GDB Server 必须已在运行（OpenOCD 或 JLinkGDBServer）
 - 带符号的 ELF 文件
-- arm-none-eabi-gdb 或 gdb-multiarch
+- arm-zephyr-eabi-gdb、arm-none-eabi-gdb 或 gdb-multiarch
+
+### Zephyr 固件要求
+
+- `CONFIG_THREAD_MONITOR=y`（读取线程链表 `_kernel.threads` 的必需配置）
+- `CONFIG_THREAD_NAME=y`（推荐，否则线程名退化为 ELF 符号推断）
+- 对象追踪（可选）：启用 `CONFIG_TRACING_OBJECT_TRACKING=y` 后可通过追踪链表发现动态创建的对象；未启用时脚本回退到静态段符号 `_k_*_list_start/_end`，只能发现 `K_MSGQ_DEFINE`/`K_SEM_DEFINE` 等静态定义的对象
 
 ## 基础用法
 
@@ -56,11 +62,23 @@ python3 skills/rtos-debug/scripts/rtos_debugger.py \
 
 ## RTOS 支持级别
 
-| RTOS | 任务列表 | 栈水位 | 死锁检测 | 队列状态 |
+| RTOS | 任务列表 | 栈水位 | 死锁检测 | 队列/对象状态 |
 |------|---------|--------|---------|---------|
 | FreeRTOS | ✅ 完整 | ✅ 完整 | ✅ 基本 | ✅ 基本 |
+| Zephyr | ✅ 完整 | ❌ 暂不支持 | ✅ mutex 等待环 | ✅ msgq/sem/mutex/queue/fifo/lifo |
 | RT-Thread | ⚠️ 基本 | ⚠️ 基本 | ❌ | ❌ |
-| Zephyr | ⚠️ 基本 | ⚠️ 基本 | ❌ | ❌ |
+
+### Zephyr 支持细节
+
+- **任务列表**：遍历 `_kernel.threads` 链表（`next_thread` 串联），读取线程名、
+  `base.thread_state`、`base.prio`、`base.pended_on`。全部通过 GDB 按字段名
+  读取，不依赖结构体偏移，对 `SCHED_*`/`WAITQ_*` Kconfig 变体不敏感。
+- **内核对象**：支持 `k_msgq`/`k_sem`/`k_mutex`/`k_queue`/`k_fifo`/`k_lifo`。
+  显示 sem 计数/上限、msgq 已用/容量/消息大小、mutex 持有者与锁计数，
+  并通过线程的 `pended_on` 与对象 `wait_q` 地址匹配自动列出等待者。
+- **死锁检测**：构建 mutex 等待者→持有者图做环检测（报出形如
+  `deadlockB -> deadlockA -> deadlockB` 的等待环）；辅助启发式为
+  "无就绪线程且任务数 > 1"。
 
 ## 典型工作流
 

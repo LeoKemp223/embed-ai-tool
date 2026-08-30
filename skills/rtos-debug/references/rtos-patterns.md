@@ -80,6 +80,28 @@ void USART1_IRQHandler(void) {
 
 | 变量名 | 含义 |
 |--------|------|
-| `_kernel` | 内核状态结构体 |
-| `_kernel.current` | 当前线程指针 |
+| `_kernel.threads` | 线程链表头（指向第一个线程的指针，经 `next_thread` 串联） |
+| `_kernel.cpus[i].current` | 第 i 个 CPU 当前运行线程 |
 | `_kernel.ready_q` | 就绪队列 |
+| `_track_list_k_msgq` 等 | `CONFIG_TRACING_OBJECT_TRACKING` 内核对象追踪链表头 |
+| `_k_sem_list_start/_end` 等 | 静态定义内核对象段边界（链接脚本生成） |
+
+### Zephyr thread_state 位（`base.thread_state`）
+
+| 位 | 含义 |
+|----|------|
+| `0x01` | DUMMY（未初始化栈的线程） |
+| `0x02` | PENDING（等待某个内核对象） |
+| `0x04` | PRESTART（尚未开始运行） |
+| `0x08` | DEAD |
+| `0x10` | SUSPENDED |
+| `0x80` | QUEUED（在就绪队列中） |
+
+## Zephyr 死锁排查流程
+
+1. 运行 `rtos_debugger.py --deadlock --elf build/zephyr.elf`，
+   脚本会构建 mutex 等待者→持有者图并检测环。
+2. 若报出等待环（如 `A -> B -> A`），用 `--queues` 查看每个 mutex
+   的持有者与等待者，确认锁获取顺序。
+3. 修复方式：统一加锁顺序，或改用 `k_mutex_lock` 超时参数（避免
+   `K_FOREVER`）后重试。
